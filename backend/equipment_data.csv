@@ -1,7 +1,13 @@
-Vehicle/Aircraft ID,Temperature,Vibration,Pressure,Battery,Operating hours,Last maintenance date
-A101,95,0.9,40,80,1200,2026-08-01
-A105,75,0.3,42,15,800,2026-08-15
-A110,70,0.2,45,95,300,2026-09-01
-V201,88,0.7,35,45,2100,2026-07-20
-V202,65,0.1,44,100,100,2026-09-10
-A112,80,0.4,41,60,950,2026-08-20
+equipment_id,equipment_type,model,unit,temperature,vibration,pressure,battery,total_usage_hours,last_service_date,mission_status
+A101,Aircraft,UH-60 Black Hawk,1st Aviation Battalion,95,0.9,40,80,1200,2025-08-01,MAINTENANCE REQUIRED
+A105,Aircraft,UH-60 Black Hawk,1st Aviation Battalion,75,0.3,42,15,800,2025-08-15,READY WITH WARNING
+A110,Aircraft,CH-47 Chinook,2nd Aviation Battalion,70,0.2,45,95,300,2025-09-01,MISSION READY
+A112,Aircraft,CH-47 Chinook,2nd Aviation Battalion,80,0.4,41,60,950,2025-08-20,MISSION READY
+A115,Aircraft,AH-64 Apache,3rd Aviation Battalion,110,1.2,33,40,1800,2025-07-10,NOT MISSION READY
+A120,Aircraft,AH-64 Apache,3rd Aviation Battalion,68,0.15,46,98,150,2025-09-05,MISSION READY
+V201,Vehicle,M1A2 Abrams,1st Armored Brigade,88,0.7,35,45,2100,2025-07-20,MAINTENANCE REQUIRED
+V202,Vehicle,M1A2 Abrams,1st Armored Brigade,65,0.1,44,100,100,2025-09-10,MISSION READY
+V205,Vehicle,M2 Bradley,2nd Infantry Brigade,92,0.85,32,55,1650,2025-07-30,MAINTENANCE REQUIRED
+V210,Vehicle,M2 Bradley,2nd Infantry Brigade,72,0.25,43,88,420,2025-08-25,MISSION READY
+V215,Vehicle,MRAP MaxxPro,3rd Infantry Brigade,105,1.1,30,35,2500,2025-06-15,NOT MISSION READY
+V220,Vehicle,MRAP MaxxPro,3rd Infantry Brigade,74,0.3,42,92,310,2025-09-02,MISSION READY
