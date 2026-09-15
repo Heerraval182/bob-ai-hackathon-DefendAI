@@ -5,12 +5,16 @@ import type { SensorReading } from "@/lib/api";
 interface Props { readings: SensorReading[]; sensorType: string; unit: string; color: string; }
 
 export default function SensorChart({ readings, sensorType, unit, color }: Props) {
-  const data = readings
-    .filter((r) => r.sensor_type === sensorType)
-    .map((r) => ({
+  const data = readings.map((r) => {
+    const raw =
+      sensorType === "temperature" ? r.temperature :
+      sensorType === "vibration"   ? r.vibration   :
+      sensorType === "pressure"    ? r.pressure     : r.battery;
+    return {
       time: new Date(r.timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-      value: r.value,
-    }));
+      value: raw,
+    };
+  });
 
   if (!data.length) return <div className="flex items-center justify-center h-32 text-sm text-slate-400">No data</div>;
 

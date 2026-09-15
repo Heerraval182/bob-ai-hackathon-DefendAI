@@ -1,43 +1,53 @@
 "use client";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
-import { mockMaintenanceTasks, mockEquipment } from "@/lib/mockData";
+import { api } from "@/lib/api";
 import { Card, PageHeader, PriorityBadge } from "@/components/ui";
 import type { MaintenanceTask } from "@/lib/api";
 import { Play, CheckCircle2, ClipboardList } from "lucide-react";
 
-type PF = "ALL"|"CRITICAL"|"HIGH"|"MEDIUM"|"LOW";
-type SF = "ALL"|"PENDING"|"IN_PROGRESS"|"COMPLETED";
-const prioOrder = { CRITICAL:0, HIGH:1, MEDIUM:2, LOW:3 };
+type PF = "ALL" | "Critical" | "High" | "Medium" | "Low";
+type SF = "ALL" | "Pending" | "In Progress" | "Completed";
 
+const PRIO_ORDER: Record<string, number> = { Critical: 0, High: 1, Medium: 2, Low: 3 };
 const PRIO_STRIP: Record<string, string> = {
-  CRITICAL: "bg-red-500",
-  HIGH:     "bg-orange-400",
-  MEDIUM:   "bg-yellow-400",
-  LOW:      "bg-slate-300",
+  Critical: "bg-red-500",
+  High:     "bg-orange-400",
+  Medium:   "bg-yellow-400",
+  Low:      "bg-slate-300",
 };
 const STATUS_STYLE: Record<string, string> = {
-  COMPLETED:   "bg-emerald-50 text-emerald-700 border border-emerald-200",
-  IN_PROGRESS: "bg-blue-50 text-blue-700 border border-blue-200",
-  PENDING:     "bg-slate-50 text-slate-600 border border-slate-200",
+  Completed:    "bg-emerald-50 text-emerald-700 border border-emerald-200",
+  "In Progress":"bg-blue-50 text-blue-700 border border-blue-200",
+  Pending:      "bg-slate-50 text-slate-600 border border-slate-200",
 };
 
 export default function MaintenancePage() {
-  const [pf, setPf] = useState<PF>("ALL");
-  const [sf, setSf] = useState<SF>("PENDING");
-  const [tasks, setTasks] = useState<MaintenanceTask[]>(mockMaintenanceTasks);
+  const [pf, setPf]   = useState<PF>("ALL");
+  const [sf, setSf]   = useState<SF>("Pending");
+  const [tasks, setTasks] = useState<MaintenanceTask[]>([]);
+  const [equipMap, setEquipMap] = useState<Record<string, string>>({});
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    Promise.all([
+      api.getMaintenanceRecommendations().catch(() => []),
+      api.getEquipment().catch(() => []),
+    ]).then(([t, eq]) => {
+      setTasks(t);
+      setEquipMap(Object.fromEntries(eq.map(e => [e.equipment_id, e.model])));
+    }).finally(() => setLoading(false));
+  }, []);
 
   const visible = tasks
-    .filter((t) => pf==="ALL" || t.priority===pf)
-    .filter((t) => sf==="ALL" || t.status===sf)
-    .sort((a,b) => prioOrder[a.priority]-prioOrder[b.priority]);
+    .filter(t => pf === "ALL" || t.priority === pf)
+    .filter(t => sf === "ALL" || t.status === sf)
+    .sort((a, b) => (PRIO_ORDER[a.priority] ?? 99) - (PRIO_ORDER[b.priority] ?? 99));
 
-  const model = (id: string) => mockEquipment.find(e=>e.equipment_id===id)?.model ?? id;
-  const totalDT = visible.reduce((s,t)=>s+t.estimated_downtime,0);
-
-  const prioCounts = (["CRITICAL","HIGH","MEDIUM","LOW"] as const).map(p => ({
-    p,
-    count: tasks.filter(t=>t.priority===p && t.status!=="COMPLETED").length,
+  const model = (id: string) => equipMap[id] ?? id;
+  const totalDT = visible.reduce((s, t) => s + (t.estimated_downtime ?? 0), 0);
+  const prioCounts = (["Critical", "High", "Medium", "Low"] as const).map(p => ({
+    p, count: tasks.filter(t => t.priority === p && t.status !== "Completed").length,
   }));
 
   return (
@@ -48,7 +58,9 @@ export default function MaintenancePage() {
         action={
           <div className="flex items-center gap-2 px-3 py-1.5 bg-white border border-slate-200 rounded-xl shadow-sm">
             <ClipboardList className="w-3.5 h-3.5 text-slate-500" />
-            <span className="text-xs text-slate-500 font-medium">{tasks.filter(t=>t.status==="PENDING").length} pending</span>
+            <span className="text-xs text-slate-500 font-medium">
+              {tasks.filter(t => t.status === "Pending").length} pending
+            </span>
           </div>
         }
       />
@@ -56,20 +68,17 @@ export default function MaintenancePage() {
       {/* Priority stat cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">
         {([
-          { p: "CRITICAL", label: "Critical",  color: "text-red-700",    bg: "bg-red-50",    border: "border-red-200"   },
-          { p: "HIGH",     label: "High",       color: "text-orange-600", bg: "bg-orange-50", border: "border-orange-200"},
-          { p: "MEDIUM",   label: "Medium",     color: "text-yellow-600", bg: "bg-yellow-50", border: "border-yellow-200"},
-          { p: "LOW",      label: "Low",        color: "text-slate-600",  bg: "bg-slate-50",  border: "border-slate-200" },
+          { p: "Critical", label: "Critical", color: "text-red-700",    bg: "bg-red-50",    border: "border-red-200"   },
+          { p: "High",     label: "High",     color: "text-orange-600", bg: "bg-orange-50", border: "border-orange-200"},
+          { p: "Medium",   label: "Medium",   color: "text-yellow-600", bg: "bg-yellow-50", border: "border-yellow-200"},
+          { p: "Low",      label: "Low",      color: "text-slate-600",  bg: "bg-slate-50",  border: "border-slate-200" },
         ] as const).map(s => {
-          const count = prioCounts.find(c=>c.p===s.p)?.count ?? 0;
+          const count = prioCounts.find(c => c.p === s.p)?.count ?? 0;
           return (
-            <button
-              key={s.p}
-              onClick={() => setPf(s.p as PF)}
+            <button key={s.p} onClick={() => setPf(s.p as PF)}
               className={`text-left p-4 rounded-2xl border shadow-sm transition-all hover:shadow-md ${
                 pf === s.p ? `${s.bg} ${s.border} ring-2 ring-offset-1 ring-blue-400` : "bg-white border-slate-200"
-              }`}
-            >
+              }`}>
               <p className="text-xs text-slate-400 uppercase tracking-wide font-semibold mb-1">{s.label}</p>
               <p className={`text-2xl font-black tabular-nums ${s.color}`}>{count}</p>
             </button>
@@ -79,88 +88,89 @@ export default function MaintenancePage() {
 
       {/* Filter rows */}
       <div className="flex flex-wrap gap-2 mb-5">
-        {(["ALL","CRITICAL","HIGH","MEDIUM","LOW"] as PF[]).map((p) => (
-          <button
-            key={p}
-            onClick={()=>setPf(p)}
-            className={`px-3 py-1.5 rounded-full text-xs font-semibold border transition-all ${pf===p?"bg-slate-800 text-white border-slate-800 shadow-sm":"bg-white text-slate-500 border-slate-200 hover:border-slate-400"}`}
-          >
-            {p}
-          </button>
+        {(["ALL", "Critical", "High", "Medium", "Low"] as PF[]).map(p => (
+          <button key={p} onClick={() => setPf(p)}
+            className={`px-3 py-1.5 rounded-full text-xs font-semibold border transition-all ${
+              pf === p ? "bg-slate-800 text-white border-slate-800 shadow-sm"
+              : "bg-white text-slate-500 border-slate-200 hover:border-slate-400"
+            }`}>{p}</button>
         ))}
         <span className="text-slate-300 self-center px-1">|</span>
-        {(["ALL","PENDING","IN_PROGRESS","COMPLETED"] as SF[]).map((s) => (
-          <button
-            key={s}
-            onClick={()=>setSf(s)}
-            className={`px-3 py-1.5 rounded-full text-xs font-semibold border transition-all ${sf===s?"bg-slate-800 text-white border-slate-800 shadow-sm":"bg-white text-slate-500 border-slate-200 hover:border-slate-400"}`}
-          >
-            {s.replace("_"," ")}
-          </button>
+        {(["ALL", "Pending", "In Progress", "Completed"] as SF[]).map(s => (
+          <button key={s} onClick={() => setSf(s)}
+            className={`px-3 py-1.5 rounded-full text-xs font-semibold border transition-all ${
+              sf === s ? "bg-slate-800 text-white border-slate-800 shadow-sm"
+              : "bg-white text-slate-500 border-slate-200 hover:border-slate-400"
+            }`}>{s}</button>
         ))}
       </div>
 
-      {/* Task list */}
-      {visible.length===0 && (
+      {loading && <p className="text-sm text-slate-400 text-center py-12">Loading tasks…</p>}
+
+      {!loading && visible.length === 0 && (
         <Card>
           <div className="py-12 text-center">
             <ClipboardList className="w-8 h-8 text-slate-300 mx-auto mb-3" />
             <p className="text-sm text-slate-400">No tasks match the selected filters.</p>
+            <p className="text-xs text-slate-400 mt-1">Run fleet predictions first: POST /api/predictions/run/fleet</p>
           </div>
         </Card>
       )}
+
       <div className="space-y-3">
         {visible.map((t) => (
-          <div
-            key={t.task_id}
-            className={`bg-white rounded-2xl border border-slate-200/80 shadow-sm overflow-hidden flex hover:shadow-md transition-all ${t.status==="COMPLETED" ? "opacity-50" : ""}`}
-          >
-            {/* Priority strip */}
-            <div className={`w-1 shrink-0 ${PRIO_STRIP[t.priority]}`} />
-
+          <div key={t.task_id}
+            className={`bg-white rounded-2xl border border-slate-200/80 shadow-sm overflow-hidden flex hover:shadow-md transition-all ${
+              t.status === "Completed" ? "opacity-50" : ""
+            }`}>
+            <div className={`w-1 shrink-0 ${PRIO_STRIP[t.priority] ?? "bg-slate-300"}`} />
             <div className="flex-1 p-4">
               <div className="flex items-start gap-3 justify-between flex-wrap mb-2">
                 <div>
                   <p className="text-sm font-bold text-slate-800">{t.task_type}</p>
                   <p className="text-xs text-slate-400 mt-0.5">
-                    <Link href={`/equipment/${t.equipment_id}`} className="text-blue-600 hover:text-blue-700 font-semibold">{t.equipment_id}</Link>
+                    <Link href={`/equipment/${t.equipment_id}`}
+                      className="text-blue-600 hover:text-blue-700 font-semibold">{t.equipment_id}</Link>
                     <span className="mx-1">&middot;</span>{model(t.equipment_id)}
-                    <span className="mx-1">&middot;</span>{t.component_id}
+                    {t.component_id && <><span className="mx-1">&middot;</span>{t.component_id}</>}
                   </p>
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
                   <PriorityBadge priority={t.priority} />
-                  <span className={`text-[11px] px-2.5 py-1 rounded-full font-semibold ${STATUS_STYLE[t.status]}`}>
-                    {t.status.replace("_"," ")}
+                  <span className={`text-[11px] px-2.5 py-1 rounded-full font-semibold ${STATUS_STYLE[t.status] ?? "bg-slate-100 text-slate-600"}`}>
+                    {t.status}
                   </span>
                 </div>
               </div>
 
               <p className="text-sm text-slate-600 leading-relaxed mb-3">{t.recommended_action}</p>
 
+              {t.failure_probability != null && (
+                <p className="text-xs text-slate-400 mb-2">
+                  Failure probability: <strong className="text-slate-600">{(t.failure_probability * 100).toFixed(0)}%</strong>
+                  {t.remaining_useful_life != null && <> · RUL: <strong className="text-slate-600">{t.remaining_useful_life}d</strong></>}
+                </p>
+              )}
+
               <div className="flex items-center gap-4 pt-2 border-t border-slate-50">
                 <span className="text-xs text-slate-400 flex items-center gap-1">
                   <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                     <circle cx="12" cy="12" r="10" /><path d="M12 6v6l4 2" />
                   </svg>
-                  Est. downtime: <strong className="text-slate-600">{t.estimated_downtime}h</strong>
+                  Est. downtime: <strong className="text-slate-600">{t.estimated_downtime ?? 0}h</strong>
                 </span>
-                {t.status==="PENDING" && (
+                {t.status === "Pending" && (
                   <button
-                    onClick={()=>setTasks(p=>p.map(x=>x.task_id===t.task_id?{...x,status:"IN_PROGRESS"}:x))}
-                    className="inline-flex items-center gap-1.5 text-xs text-blue-600 hover:text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 hover:border-blue-300 px-3 py-1.5 rounded-lg font-semibold transition-all"
-                  >
-                    <Play className="w-3 h-3" />
-                    Start Task
+                    onClick={() => setTasks(p => p.map(x => x.task_id === t.task_id ? { ...x, status: "In Progress" as const } : x))}
+                    className="inline-flex items-center gap-1.5 text-xs text-blue-600 hover:text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 hover:border-blue-300 px-3 py-1.5 rounded-lg font-semibold transition-all">
+                    <Play className="w-3 h-3" /> Start Task
                   </button>
                 )}
-                {t.status==="IN_PROGRESS" && (
+                {t.status === "In Progress" && (
                   <button
-                    onClick={()=>setTasks(p=>p.map(x=>x.task_id===t.task_id?{...x,status:"COMPLETED"}:x))}
-                    className="inline-flex items-center gap-1.5 text-xs text-emerald-600 hover:text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 hover:border-emerald-300 px-3 py-1.5 rounded-lg font-semibold transition-all"
-                  >
-                    <CheckCircle2 className="w-3.5 h-3.5" />
-                    Mark Complete
+                    onClick={() => setTasks(p => p.map(x => x.task_id === t.task_id ? { ...x, status: "Completed" as const } : x))}
+                    className="inline-flex items-center gap-1.5 text-xs text-emerald-600 hover:text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 hover:border-emerald-300 px-3 py-1.5 rounded-lg font-semibold transition-all">
+                    <CheckCircle2 className="w-3.5 h-3.5" /> Mark Complete
                   </button>
                 )}
               </div>
@@ -169,9 +179,9 @@ export default function MaintenancePage() {
         ))}
       </div>
 
-      {visible.length>0 && (
+      {visible.length > 0 && (
         <p className="mt-4 text-xs text-slate-400 text-right">
-          {visible.length} tasks &middot; Total est. downtime: <strong className="text-slate-600">{totalDT}h</strong>
+          {visible.length} tasks · Total est. downtime: <strong className="text-slate-600">{totalDT}h</strong>
         </p>
       )}
     </div>

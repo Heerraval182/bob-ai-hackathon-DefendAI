@@ -11,7 +11,8 @@ import {
   mockMaintenanceTasks,
   mockReport,
 } from "./mockData";
-import type { Equipment, EquipmentHealth, Alert, MaintenanceTask } from "./api";
+import type { Equipment, Alert, MaintenanceTask } from "./api";
+import type { MockEquipmentHealth } from "./mockData";
 
 // ─── Response types ──────────────────────────────────────────────────────────
 
@@ -104,7 +105,7 @@ export interface CopilotResponse {
 
 function toCard(eqId: string): EquipmentCard | null {
   const eq = mockEquipment.find((e) => e.equipment_id === eqId);
-  const h = mockHealthMap[eqId];
+  const h: MockEquipmentHealth | undefined = mockHealthMap[eqId];
   if (!eq || !h) return null;
   return {
     equipment_id: eq.equipment_id,
@@ -112,7 +113,7 @@ function toCard(eqId: string): EquipmentCard | null {
     equipment_type: eq.equipment_type,
     unit: eq.unit,
     readiness_score: h.readiness_score,
-    risk_level: h.risk_level,
+    risk_level: h.risk_level.toUpperCase() as EquipmentCard["risk_level"],
     mission_status: eq.mission_status,
     failure_probability: h.failure_probability,
     remaining_useful_life_days: h.remaining_useful_life_days,
@@ -127,11 +128,14 @@ function toMaintenanceRow(t: MaintenanceTask): MaintenanceRow {
 }
 
 function latestSensorValue(eqId: string, sensorType: string): number | null {
-  const h = mockHealthMap[eqId];
+  const h: MockEquipmentHealth | undefined = mockHealthMap[eqId];
   if (!h) return null;
-  const readings = h.sensor_readings.filter((r) => r.sensor_type === sensorType);
-  if (!readings.length) return null;
-  return readings[readings.length - 1].value;
+  const reading = h.sensor_readings[h.sensor_readings.length - 1];
+  if (!reading) return null;
+  if (sensorType === "temperature") return reading.temperature;
+  if (sensorType === "vibration")   return reading.vibration;
+  if (sensorType === "pressure")    return reading.pressure;
+  return null;
 }
 
 function sensorStatus(
@@ -184,7 +188,7 @@ function fleetSummary(): CopilotResponse {
   const r = mockReport;
   const readyPct = Math.round((r.mission_ready / r.total_equipment) * 100);
   const criticalEq = Object.entries(mockHealthMap)
-    .filter(([, h]) => h.risk_level === "CRITICAL")
+    .filter(([, h]) => (h as MockEquipmentHealth).risk_level === "Critical")
     .map(([id]) => id);
 
   return {
@@ -240,8 +244,8 @@ function notReady(): CopilotResponse {
         model: mockEquipment.find((e) => e.equipment_id === a.equipment_id)?.model ?? a.equipment_id,
         severity: a.severity,
         message: a.message,
-        component: a.component,
-        timestamp: a.timestamp,
+        component: a.alert_type,
+        timestamp: a.created_at,
       })),
     followup_suggestions: [
       "Show maintenance plan for EQ-004",
@@ -330,8 +334,8 @@ function equipmentDetail(q: string): CopilotResponse {
 function highRisk(): CopilotResponse {
   const risky = mockEquipment
     .filter((e) => {
-      const h = mockHealthMap[e.equipment_id];
-      return h.risk_level === "HIGH" || h.risk_level === "CRITICAL";
+      const h: MockEquipmentHealth | undefined = mockHealthMap[e.equipment_id];
+      return h?.risk_level === "High" || h?.risk_level === "Critical";
     })
     .sort((a, b) => mockHealthMap[b.equipment_id].failure_probability - mockHealthMap[a.equipment_id].failure_probability);
 
@@ -366,9 +370,7 @@ function vibrationAnalysis(): CopilotResponse {
       const val = latestSensorValue(eq.equipment_id, "vibration");
       const baseline = SENSOR_BASELINES.vibration[eq.equipment_id] ?? 0.5;
       if (val === null) return null;
-      const comp = mockHealthMap[eq.equipment_id]?.sensor_readings.find(
-        (r) => r.sensor_type === "vibration"
-      )?.component_id ?? "COMP-UNKNOWN";
+      const comp = mockHealthMap[eq.equipment_id]?.sensor_readings[0]?.component_id ?? "COMP-UNKNOWN";
       const deviationPct = ((val - baseline) / baseline) * 100;
       return {
         equipment_id: eq.equipment_id,
@@ -417,9 +419,7 @@ function temperatureAnalysis(): CopilotResponse {
       const val = latestSensorValue(eq.equipment_id, "temperature");
       const baseline = SENSOR_BASELINES.temperature[eq.equipment_id] ?? 90;
       if (val === null) return null;
-      const comp = mockHealthMap[eq.equipment_id]?.sensor_readings.find(
-        (r) => r.sensor_type === "temperature"
-      )?.component_id ?? "COMP-UNKNOWN";
+      const comp = mockHealthMap[eq.equipment_id]?.sensor_readings[0]?.component_id ?? "COMP-UNKNOWN";
       const deviationPct = ((val - baseline) / baseline) * 100;
       return {
         equipment_id: eq.equipment_id,
@@ -518,9 +518,7 @@ function sensorAnomalies(): CopilotResponse {
       const val = latestSensorValue(eq.equipment_id, sensorType);
       const baseline = SENSOR_BASELINES[sensorType]?.[eq.equipment_id];
       if (val === null || baseline === undefined) continue;
-      const comp =
-        mockHealthMap[eq.equipment_id]?.sensor_readings.find((r) => r.sensor_type === sensorType)
-          ?.component_id ?? "COMP-UNKNOWN";
+      const comp = mockHealthMap[eq.equipment_id]?.sensor_readings[0]?.component_id ?? "COMP-UNKNOWN";
       const deviationPct = ((val - baseline) / baseline) * 100;
       const status = sensorStatus(val, baseline);
       if (status !== "NORMAL") {
@@ -570,10 +568,10 @@ function sensorAnomalies(): CopilotResponse {
 
 function servicePriority(): CopilotResponse {
   const pending = mockMaintenanceTasks
-    .filter((t) => t.status !== "COMPLETED")
+    .filter((t) => t.status !== "Completed")
     .sort((a, b) => {
-      const order = { CRITICAL: 0, HIGH: 1, MEDIUM: 2, LOW: 3 };
-      return order[a.priority] - order[b.priority];
+      const order: Record<string, number> = { Critical: 0, High: 1, Medium: 2, Low: 3 };
+      return (order[a.priority] ?? 99) - (order[b.priority] ?? 99);
     });
 
   const top = pending[0];
@@ -606,15 +604,15 @@ function servicePriority(): CopilotResponse {
 
 function maintenancePlan(): CopilotResponse {
   const tasks = mockMaintenanceTasks
-    .filter((t) => t.status !== "COMPLETED")
+    .filter((t) => t.status !== "Completed")
     .sort((a, b) => {
-      const order = { CRITICAL: 0, HIGH: 1, MEDIUM: 2, LOW: 3 };
-      return order[a.priority] - order[b.priority];
+      const order: Record<string, number> = { Critical: 0, High: 1, Medium: 2, Low: 3 };
+      return (order[a.priority] ?? 99) - (order[b.priority] ?? 99);
     });
 
   const totalDT = tasks.reduce((s, t) => s + t.estimated_downtime, 0);
-  const critical = tasks.filter((t) => t.priority === "CRITICAL").length;
-  const high = tasks.filter((t) => t.priority === "HIGH").length;
+  const critical = tasks.filter((t) => t.priority === "Critical").length;
+  const high = tasks.filter((t) => t.priority === "High").length;
 
   return {
     kind: "maintenance_plan",
@@ -705,18 +703,18 @@ function alertList(): CopilotResponse {
     model: mockEquipment.find((e) => e.equipment_id === a.equipment_id)?.model ?? a.equipment_id,
     severity: a.severity,
     message: a.message,
-    component: a.component,
-    timestamp: a.timestamp,
+    component: a.alert_type,
+    timestamp: a.created_at,
   }));
 
   return {
     kind: "alert_list",
     answer:
-      `**${active.length} active alert${active.length !== 1 ? "s" : ""}** (${mockAlerts.filter((a) => a.severity === "CRITICAL" && !a.acknowledged).length} critical):\n\n` +
+      `**${active.length} active alert${active.length !== 1 ? "s" : ""}** (${mockAlerts.filter((a) => a.severity === "Critical" && !a.acknowledged).length} critical):\n\n` +
       active
         .map(
           (a) =>
-            `• [${a.severity}] **${a.equipment_id}** — ${a.component}: ${a.message}`
+            `• [${a.severity}] **${a.equipment_id}** — ${a.alert_type}: ${a.message}`
         )
         .join("\n"),
     explanation:
@@ -753,12 +751,12 @@ function readinessScores(): CopilotResponse {
     sources: ["Readiness scoring engine", "Sensor health index", "Maintenance history", "Failure prediction model"],
     equipment_cards: sorted.map(({ e }) => toCard(e.equipment_id)).filter(Boolean) as EquipmentCard[],
     readiness_breakdown: {
-      mission_ready: mockReport.mission_ready,
-      ready_with_warning: mockReport.ready_with_warning,
+      mission_ready:        mockReport.mission_ready,
+      ready_with_warning:   mockReport.ready_with_warning,
       maintenance_required: mockReport.maintenance_required,
-      not_mission_ready: mockReport.not_mission_ready,
-      total: mockReport.total_equipment,
-      critical_alerts: mockReport.critical_alerts,
+      not_mission_ready:    mockReport.not_mission_ready,
+      total:                mockReport.total_equipment,
+      critical_alerts:      mockReport.critical_alerts,
     },
     followup_suggestions: [
       "Show fleet overview",
@@ -769,9 +767,9 @@ function readinessScores(): CopilotResponse {
 }
 
 function componentHealth(): CopilotResponse {
-  const tasks = mockMaintenanceTasks.sort((a, b) => {
-    const order = { CRITICAL: 0, HIGH: 1, MEDIUM: 2, LOW: 3 };
-    return order[a.priority] - order[b.priority];
+  const tasks = [...mockMaintenanceTasks].sort((a, b) => {
+    const order: Record<string, number> = { Critical: 0, High: 1, Medium: 2, Low: 3 };
+    return (order[a.priority] ?? 99) - (order[b.priority] ?? 99);
   });
 
   return {

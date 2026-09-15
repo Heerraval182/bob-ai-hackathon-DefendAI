@@ -1,76 +1,92 @@
 import React from "react";
 
-type Status = "MISSION READY"|"READY WITH WARNING"|"MAINTENANCE REQUIRED"|"NOT MISSION READY";
-type Risk   = "LOW"|"MEDIUM"|"HIGH"|"CRITICAL";
-type Sev    = "INFO"|"WARNING"|"CRITICAL";
-type Prio   = "CRITICAL"|"HIGH"|"MEDIUM"|"LOW";
-
-const SC: Record<Status, string> = {
+// Accept both real backend casing (Critical/High/Low) and legacy (CRITICAL/HIGH/LOW)
+const SC: Record<string, string> = {
   "MISSION READY":        "bg-emerald-50 text-emerald-700 border border-emerald-200",
   "READY WITH WARNING":   "bg-amber-50 text-amber-700 border border-amber-200",
   "MAINTENANCE REQUIRED": "bg-orange-50 text-orange-700 border border-orange-200",
   "NOT MISSION READY":    "bg-red-50 text-red-700 border border-red-200",
 };
-const SD: Record<Status, string> = {
+const SD: Record<string, string> = {
   "MISSION READY":        "bg-emerald-500",
   "READY WITH WARNING":   "bg-amber-400",
   "MAINTENANCE REQUIRED": "bg-orange-400",
   "NOT MISSION READY":    "bg-red-500",
 };
-const RC: Record<Risk, string> = {
-  LOW:      "bg-emerald-50 text-emerald-700 border border-emerald-200",
-  MEDIUM:   "bg-amber-50 text-amber-700 border border-amber-200",
-  HIGH:     "bg-orange-50 text-orange-700 border border-orange-200",
-  CRITICAL: "bg-red-50 text-red-700 border border-red-200",
+const RC: Record<string, string> = {
+  Low: "bg-emerald-50 text-emerald-700 border border-emerald-200",  LOW: "bg-emerald-50 text-emerald-700 border border-emerald-200",
+  Medium: "bg-amber-50 text-amber-700 border border-amber-200",    MEDIUM: "bg-amber-50 text-amber-700 border border-amber-200",
+  High: "bg-orange-50 text-orange-700 border border-orange-200",   HIGH: "bg-orange-50 text-orange-700 border border-orange-200",
+  Critical: "bg-red-50 text-red-700 border border-red-200",        CRITICAL: "bg-red-50 text-red-700 border border-red-200",
+  Unknown: "bg-slate-50 text-slate-600 border border-slate-200",
 };
-const SeC: Record<Sev, string> = {
-  INFO:     "bg-sky-50 text-sky-700 border border-sky-200",
-  WARNING:  "bg-amber-50 text-amber-700 border border-amber-200",
-  CRITICAL: "bg-red-50 text-red-700 border border-red-200",
+const SeC: Record<string, string> = {
+  Low: "bg-sky-50 text-sky-700 border border-sky-200",     INFO: "bg-sky-50 text-sky-700 border border-sky-200",
+  Medium: "bg-amber-50 text-amber-700 border border-amber-200", WARNING: "bg-amber-50 text-amber-700 border border-amber-200",
+  High: "bg-orange-50 text-orange-700 border border-orange-200",
+  Critical: "bg-red-50 text-red-700 border border-red-200", CRITICAL: "bg-red-50 text-red-700 border border-red-200",
 };
-const PC: Record<Prio, string> = {
-  CRITICAL: "bg-red-50 text-red-700 border border-red-200",
-  HIGH:     "bg-orange-50 text-orange-700 border border-orange-200",
-  MEDIUM:   "bg-amber-50 text-amber-700 border border-amber-200",
-  LOW:      "bg-slate-50 text-slate-600 border border-slate-200",
+const PC: Record<string, string> = {
+  Critical: "bg-red-50 text-red-700 border border-red-200",    CRITICAL: "bg-red-50 text-red-700 border border-red-200",
+  High: "bg-orange-50 text-orange-700 border border-orange-200", HIGH: "bg-orange-50 text-orange-700 border border-orange-200",
+  Medium: "bg-amber-50 text-amber-700 border border-amber-200",  MEDIUM: "bg-amber-50 text-amber-700 border border-amber-200",
+  Low: "bg-slate-50 text-slate-600 border border-slate-200",   LOW: "bg-slate-50 text-slate-600 border border-slate-200",
 };
-const RD: Record<Risk, string> = {
-  LOW: "bg-emerald-500", MEDIUM: "bg-amber-500", HIGH: "bg-orange-500", CRITICAL: "bg-red-500",
+const RD: Record<string, string> = {
+  Low: "bg-emerald-500", LOW: "bg-emerald-500",
+  Medium: "bg-amber-500", MEDIUM: "bg-amber-500",
+  High: "bg-orange-500", HIGH: "bg-orange-500",
+  Critical: "bg-red-500", CRITICAL: "bg-red-500",
+  Unknown: "bg-slate-400",
 };
 
-export function StatusBadge({ status }: { status: Status }) {
+export function StatusBadge({ status }: { status: string }) {
+  const cls = SC[status] ?? "bg-slate-50 text-slate-600 border border-slate-200";
+  const dot = SD[status] ?? "bg-slate-400";
   return (
-    <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold tracking-wide ${SC[status]}`}>
-      <span className={`w-1.5 h-1.5 rounded-full ${SD[status]}`} />
+    <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold tracking-wide ${cls}`}>
+      <span className={`w-1.5 h-1.5 rounded-full ${dot}`} />
       {status}
     </span>
   );
 }
 
-export function RiskBadge({ risk }: { risk: Risk }) {
+export function RiskBadge({ risk }: { risk: string }) {
+  const cls = RC[risk] ?? "bg-slate-50 text-slate-600 border border-slate-200";
+  const dot = RD[risk] ?? "bg-slate-400";
   return (
-    <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold ${RC[risk]}`}>
-      <span className={`w-1.5 h-1.5 rounded-full ${RD[risk]}`} />
+    <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold ${cls}`}>
+      <span className={`w-1.5 h-1.5 rounded-full ${dot}`} />
       {risk}
     </span>
   );
 }
 
-export function SeverityBadge({ severity }: { severity: Sev }) {
-  const dot: Record<Sev, string> = { INFO: "bg-sky-500", WARNING: "bg-amber-500", CRITICAL: "bg-red-500" };
+export function SeverityBadge({ severity }: { severity: string }) {
+  const dotMap: Record<string, string> = {
+    Low: "bg-sky-500", INFO: "bg-sky-500",
+    Medium: "bg-amber-500", WARNING: "bg-amber-500",
+    High: "bg-orange-500",
+    Critical: "bg-red-500", CRITICAL: "bg-red-500",
+  };
   return (
-    <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold ${SeC[severity]}`}>
-      <span className={`w-1.5 h-1.5 rounded-full ${dot[severity]}`} />
+    <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold ${SeC[severity] ?? "bg-slate-50 text-slate-600 border border-slate-200"}`}>
+      <span className={`w-1.5 h-1.5 rounded-full ${dotMap[severity] ?? "bg-slate-400"}`} />
       {severity}
     </span>
   );
 }
 
-export function PriorityBadge({ priority }: { priority: Prio }) {
-  const dot: Record<Prio, string> = { CRITICAL: "bg-red-500", HIGH: "bg-orange-500", MEDIUM: "bg-amber-500", LOW: "bg-slate-400" };
+export function PriorityBadge({ priority }: { priority: string }) {
+  const dotMap: Record<string, string> = {
+    Critical: "bg-red-500", CRITICAL: "bg-red-500",
+    High: "bg-orange-500", HIGH: "bg-orange-500",
+    Medium: "bg-amber-500", MEDIUM: "bg-amber-500",
+    Low: "bg-slate-400", LOW: "bg-slate-400",
+  };
   return (
-    <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold ${PC[priority]}`}>
-      <span className={`w-1.5 h-1.5 rounded-full ${dot[priority]}`} />
+    <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold ${PC[priority] ?? "bg-slate-50 text-slate-600 border border-slate-200"}`}>
+      <span className={`w-1.5 h-1.5 rounded-full ${dotMap[priority] ?? "bg-slate-400"}`} />
       {priority}
     </span>
   );
