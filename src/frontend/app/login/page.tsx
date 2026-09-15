@@ -27,12 +27,6 @@ export default function LoginPage() {
     }
   }
 
-  function fillDemo() {
-    setEmail("hayes@defendai.mil");
-    setPassword("demo1234");
-    setError("");
-  }
-
   return (
     <div className="min-h-screen flex bg-slate-950">
       {/* Left panel — branding */}
@@ -95,15 +89,6 @@ export default function LoginPage() {
             <h1 className="text-2xl font-bold text-white mb-1">Welcome back</h1>
             <p className="text-slate-400 text-sm">Sign in to your command account</p>
           </div>
-
-          {/* Demo hint */}
-          <button
-            onClick={fillDemo}
-            className="w-full mb-6 px-4 py-2.5 rounded-xl border border-blue-800 bg-blue-950/60 text-blue-300 text-sm hover:bg-blue-900/60 transition-colors text-left flex items-center gap-2"
-          >
-            <span className="text-base">⚡</span>
-            <span><strong>Quick demo:</strong> Click to fill credentials — <code className="text-blue-200 text-xs">hayes@defendai.mil</code></span>
-          </button>
 
           <form onSubmit={handleSubmit} className="space-y-4">
             {error && (
