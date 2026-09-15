@@ -2,70 +2,123 @@
 
 ## System Architecture
 
-The Mission Readiness & Predictive Maintenance Copilot is structured as a layered pipeline — from raw sensor ingestion through AI prediction to the operator dashboard.
+The Mission Readiness & Predictive Maintenance Copilot is structured as a three-service pipeline — Node.js/Express backend, Python AI engine, and a Next.js frontend — all backed by PostgreSQL with TimescaleDB.
 
 ```mermaid
 graph TD
-    A[HUMS Sensors<br/>Temperature · Vibration · Pressure · Usage] -->|API / CSV / Stream| B[Data Ingestion Layer]
-    B --> C[Data Processing Layer<br/>Cleaning · Validation · Feature Extraction]
-    C --> D[AI Prediction Engine<br/>Anomaly Detection · Failure Prediction · RUL]
-    D --> E[Readiness Scoring Engine<br/>MISSION READY / WARNING / MAINTENANCE REQUIRED / NOT READY]
-    D --> F[Recommendation Engine<br/>Maintenance Priority · Action Plan]
-    E --> G[Copilot Dashboard<br/>Alerts · Reports · Natural-Language Chat]
-    F --> G
-    G -->|Feedback| H[(Storage<br/>PostgreSQL · TimescaleDB)]
-    C --> H
-    D --> H
+    A[HUMS Sensors<br/>Temperature · Vibration · Pressure · Battery · Usage Hours] -->|CSV seed / REST POST| B[Node.js Backend :3001<br/>server.js · database.js · pipeline.js]
+    B --> C[PostgreSQL + TimescaleDB<br/>Equipment · SensorReadings · Predictions · MaintenanceTasks]
+    C --> D[Python AI Engine :5001<br/>features.py · anomaly.py · prediction.py · rul.py]
+    D -->|Isolation Forest| E[Anomaly Score]
+    D -->|XGBoost Classifier| F[Failure Probability + Risk Level]
+    D -->|XGBoost Regressor| G[Remaining Useful Life]
+    E --> H[engine.py Orchestrator<br/>writes Predictions table · updates Equipment.mission_status]
+    F --> H
+    G --> H
+    H --> I[Recommendation Engine<br/>recommendation.js — task generator + ranker]
+    H --> J[Copilot NLP Router<br/>copilot.js — 9-intent handler + Groq LLM streaming]
+    I --> K[Next.js Frontend :3000<br/>Fleet Dashboard · Equipment Health · Alerts · Maintenance · Copilot Chat]
+    J --> K
+    C --> K
 ```
+
+## Services Overview
+
+| Service | Technology | Port | Entry Point |
+|---|---|---|---|
+| Backend API | Node.js 18 + Express | 3001 | `src/backend-node/server.js` |
+| AI Engine | Python 3.11 + XGBoost + Scikit-learn | 5001 | `src/backend-node/ai/server.py` |
+| Frontend | Next.js 14 + Tailwind CSS | 3000 | `src/frontend/` |
+| Database | PostgreSQL 14 + TimescaleDB | 5432 | `src/backend-node/database.js` |
 
 ## Components
 
-| Component | Technology | Responsibility |
+| Component | File(s) | Responsibility |
 |---|---|---|
-| Frontend | React / Next.js + Tailwind CSS + Chart.js | Fleet dashboard, equipment health pages, alert screens, Copilot chat interface |
-| Backend API | Python FastAPI | REST endpoints, business logic, WebSocket live alerts, orchestration |
-| AI / ML Engine | Python · Scikit-learn · XGBoost · Pandas | Anomaly detection, failure prediction, remaining useful life estimation, readiness scoring |
-| Recommendation Engine | Python | Prioritises maintenance tasks, generates action plans and explanations |
-| Structured Storage | PostgreSQL | Equipment records, maintenance tasks, predictions, audit trail |
-| Time-Series Storage | TimescaleDB / InfluxDB | Sensor readings with high-frequency timestamps |
-| Object Storage | Cloud / On-premise | Raw data files, exported maintenance reports |
+| Express API | `server.js` | All REST endpoints, request validation, readiness scoring, orchestration calls to AI engine |
+| DB Schema | `database.js` | Creates Equipment, SensorReadings (hypertable), Predictions, MaintenanceTasks tables |
+| CSV Seeder | `pipeline.js` | Idempotent loader of `equipment_data.csv` — 12 real equipment records |
+| AI Feature Extractor | `ai/features.py` | Queries PostgreSQL for latest sensor readings and computes feature vector per asset |
+| Anomaly Detector | `ai/anomaly.py` | Isolation Forest — flags sensor profiles that deviate from fleet baseline |
+| Failure Predictor | `ai/prediction.py` | XGBoost binary classifier — outputs failure probability + risk level (Critical/High/Medium/Low) |
+| RUL Estimator | `ai/rul.py` | XGBoost regressor — outputs remaining useful life in days |
+| Explanation Generator | `ai/explanation.py` | Converts numeric risk scores into plain-English sentences for operators |
+| AI Orchestrator | `ai/engine.py` | Runs full pipeline per asset, writes result to Predictions table, updates Equipment.mission_status |
+| AI HTTP Server | `ai/server.py` | Exposes `POST /predict` (single asset) and `POST /predict/fleet` (all assets) on port 5001 |
+| Model Trainer | `ai/train.py` | Trains XGBoost failure + RUL models on `equipment_data.csv` with physics-based degradation augmentation |
+| Copilot Router | `copilot.js` | 9-intent NLP handler — routes natural-language queries to DB-driven answer functions |
+| Recommendation Engine | `recommendation.js` | Generates and ranks maintenance tasks from AI predictions (Critical → High → Medium → Low) |
+| Frontend | `src/frontend/` | Next.js App Router — fleet dashboard, equipment health, alerts, maintenance, Copilot chat |
 
 ## Data Flow
 
-1. HUMS sensors and maintenance systems produce readings and service records.
-2. The ingestion layer receives data via REST API, CSV upload, or streaming; validates, timestamps, and stores raw records.
-3. The processing layer removes invalid values, normalises readings, fills gaps, and extracts features (average temperature, vibration trend, pressure deviation, usage hours, time since last service, failure frequency).
-4. The AI prediction engine runs anomaly detection (Isolation Forest / Autoencoder) and failure-probability models (Random Forest / XGBoost), outputting risk level, confidence score, and predicted failure date.
-5. The readiness scoring engine combines prediction output with maintenance history and mission requirements to assign one of four readiness levels.
-6. The recommendation engine ranks maintenance tasks by urgency (Critical / High / Medium / Low) and produces an actionable maintenance plan.
-7. Alerts, readiness status, and recommendations are surfaced on the Copilot dashboard in real time.
-8. Maintenance personnel act on recommendations; completed records are stored and used for future model improvement.
+1. **Seeding**: `pipeline.js` loads `equipment_data.csv` (12 assets with temperature, vibration, pressure, battery, usage hours) into `Equipment` and `SensorReadings` tables on startup.
+2. **Sensor Ingest**: New readings arrive via `POST /api/sensors/ingest`; validated and inserted into the `SensorReadings` TimescaleDB hypertable.
+3. **Prediction Run**: `POST /api/predictions/run` (single) or `/api/predictions/run/fleet` (all) calls the Python AI engine at `:5001`.
+4. **AI Pipeline**: `features.py` fetches latest readings → `anomaly.py` computes anomaly score → `prediction.py` outputs failure probability → `rul.py` outputs RUL days → `explanation.py` builds plain-English text → `engine.py` writes a row to `Predictions` and updates `Equipment.mission_status`.
+5. **Recommendations**: `POST /api/maintenance/plan` calls `recommendation.js` which reads the latest `Predictions` and returns a ranked task list.
+6. **Copilot**: `POST /api/copilot/query` routes to `copilot.js` (9 intents — fleet status, equipment health, failure risk, maintenance, alerts, RUL, anomalies, readiness check, mission status). For free-form queries, the frontend streams via Groq `llama-3.3-70b-versatile`.
+7. **Dashboard**: The Next.js frontend calls the Node.js API and renders fleet readiness, sensor trend charts, active alerts, maintenance task list, and Copilot chat.
 
-## API Endpoints
+## API Endpoints (Node.js Backend — port 3001)
 
 | Method | Endpoint | Purpose |
 |---|---|---|
-| POST | `/api/sensors/data` | Ingest sensor readings |
-| GET | `/api/equipment` | List all equipment |
-| GET | `/api/equipment/{id}/health` | Current health status for one asset |
-| GET | `/api/equipment/{id}/readiness` | Readiness classification for one asset |
+| GET | `/api/equipment` | List all equipment with latest readiness status |
+| GET | `/api/equipment/:id` | Single asset detail |
+| GET | `/api/equipment/:id/health` | Latest sensor readings + computed health score |
+| GET | `/api/equipment/:id/readiness` | Current readiness classification for one asset |
+| POST | `/api/sensors/ingest` | Ingest new sensor reading |
 | GET | `/api/alerts` | Active alerts across the fleet |
 | GET | `/api/maintenance/recommendations` | Prioritised maintenance task list |
-| POST | `/api/maintenance/feedback` | Submit completed-maintenance feedback |
-| POST | `/api/copilot/query` | Natural-language Copilot question |
-| GET | `/api/reports/readiness` | Fleet-wide readiness report |
+| POST | `/api/maintenance/plan` | Generate + rank maintenance plan (calls recommendation.js) |
+| POST | `/api/predictions/run` | Run AI prediction for one asset (calls Python engine) |
+| POST | `/api/predictions/run/fleet` | Run AI predictions for entire fleet |
+| POST | `/api/copilot/query` | Natural-language Copilot question (9-intent NLP router) |
+
+## AI Engine Endpoints (Python — port 5001)
+
+| Method | Endpoint | Purpose |
+|---|---|---|
+| POST | `/predict` | Run full AI pipeline for one equipment ID |
+| POST | `/predict/fleet` | Run full AI pipeline for all active equipment |
+
+## Database Schema
+
+### Equipment
+```
+equipment_id (PK)  equipment_type  model  unit
+mission_status     last_service_date      total_usage_hours
+```
+
+### SensorReadings (TimescaleDB hypertable on `timestamp`)
+```
+id (PK)  equipment_id (FK)  timestamp
+temperature  vibration  pressure  battery
+```
+
+### Predictions
+```
+id (PK)  equipment_id (FK)  timestamp
+anomaly_score  failure_probability  risk_level
+rul_days  explanation  model_version
+```
+
+### MaintenanceTasks
+```
+id (PK)  equipment_id (FK)
+task_type  priority  recommended_action
+estimated_downtime_hours  status  created_at
+```
 
 ## Security Considerations
 
-- Authentication and role-based access control on all API routes.
-- Data encrypted in transit (TLS) and at rest.
-- Audit log maintained for all AI recommendations and decisions.
-- All sensor inputs validated before processing.
-- Human approval required before executing critical maintenance actions.
+- All sensor inputs validated before insertion (range checks, type checks in `server.js`).
 - AI predictions include confidence score and plain-language explanation.
-- Fallback rule-based logic activates when AI predictions are unavailable.
-- Demo/simulation data strictly separated from operational data.
+- Fallback rule-based readiness scoring (`computeReadiness()` in `server.js`) activates when the AI engine is unavailable.
+- Demo/CSV data is strictly separated from any real operational data.
+- Human approval is expected before executing critical maintenance actions — the system only recommends, not executes.
 
 ## Scalability Notes
 
-The FastAPI backend is stateless and can be horizontally scaled behind a load balancer. Sensor ingestion can be decoupled into an async queue (e.g. Kafka or Redis Streams) to handle burst traffic. TimescaleDB provides native time-series partitioning for high-frequency sensor data. ML models are packaged as independent inference services and can be updated or swapped without redeploying the rest of the stack. The Docker-based deployment supports both cloud and on-premise environments.
+The Node.js backend is stateless and can be horizontally scaled behind a load balancer. The Python AI engine is a separate HTTP service and can be scaled independently or replaced with a containerised inference endpoint. TimescaleDB provides native time-series partitioning for high-frequency sensor data. XGBoost models are saved as JSON artefacts (`failure_model.json`, `rul_model.json`) and can be updated without redeploying the rest of the stack.

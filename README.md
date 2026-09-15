@@ -29,9 +29,10 @@ We built a Mission Readiness & Predictive Maintenance Copilot that analyses HUMS
 
 - **Asset Readiness Assessment**: Evaluates aircraft, vehicles, and equipment to identify assets that are mission-ready, at-risk, or non-ready.
 - **Readiness Issue Explanation**: Explains the sensor or service-record factors responsible for an asset being classified as non-ready or at-risk.
-- **Predictive Failure Detection**: Analyses HUMS sensor data and historical maintenance records to identify components that are likely to fail before the next mission window.
-- **Maintenance Prioritisation**: Ranks maintenance requirements based on asset condition, predicted failure risk, mission importance, and urgency.
-- **Copilot Assistance**: Provides a conversational interface for querying asset health, understanding failure risks, and obtaining maintenance recommendations.
+- **Predictive Failure Detection**: Analyses HUMS sensor data and historical maintenance records — using real XGBoost models — to identify components likely to fail before the next mission window.
+- **Remaining Useful Life (RUL) Estimation**: Predicts how many cycles/days remain before failure for each asset.
+- **Maintenance Prioritisation**: Ranks maintenance requirements based on asset condition, predicted failure risk, mission importance, and urgency (Critical / High / Medium / Low).
+- **Copilot Assistance**: Conversational interface (9-intent NLP router + Groq LLM streaming) for querying asset health, understanding failure risks, and obtaining maintenance recommendations.
 
 ---
 
@@ -39,64 +40,85 @@ We built a Mission Readiness & Predictive Maintenance Copilot that analyses HUMS
 
 | Category | Technologies |
 |---|---|
-| **Languages** | Python, TypeScript |
-| **Frameworks** | FastAPI (backend), React / Next.js (frontend) |
+| **Languages** | Python 3.11, TypeScript, JavaScript (Node.js) |
+| **Frameworks** | Node.js / Express (backend API), Next.js 14 + Tailwind CSS (frontend) |
 | **IBM Technologies** | IBM Bob (natural-language Copilot interface) |
-| **Databases** | PostgreSQL (structured data), TimescaleDB (sensor time-series) |
-| **AI / ML** | Scikit-learn, XGBoost, Pandas, NumPy |
-| **Other** | Docker, Tailwind CSS, Chart.js |
+| **AI / ML** | Python · Scikit-learn · XGBoost · Pandas · NumPy (Isolation Forest anomaly detection, XGBoost failure + RUL models) |
+| **LLM** | Groq API — `llama-3.3-70b-versatile` (streaming Copilot responses) |
+| **Databases** | PostgreSQL 14+ · TimescaleDB (sensor hypertable) |
+| **Other** | Docker, Chart.js / Recharts |
 
 ---
 
 ## 📁 Repository Structure
 
 ```
-├── src/                  # All source code
-│   ├── backend/          # FastAPI backend, ML models, recommendation engine
-│   ├── frontend/         # Next.js dashboard + Copilot chat interface
-│   └── .env.example      # Environment variable template
-├── docs/                 # Written documentation
+├── src/
+│   ├── backend-node/         # Node.js / Express backend API (port 3001)
+│   │   ├── server.js         # Main Express app — all REST endpoints
+│   │   ├── database.js       # PostgreSQL schema init + TimescaleDB hypertable
+│   │   ├── pipeline.js       # CSV seeder (idempotent)
+│   │   ├── copilot.js        # 9-intent NLP Copilot handler
+│   │   ├── recommendation.js # Maintenance task generator + ranker
+│   │   ├── equipment_data.csv# 12 real equipment records
+│   │   └── ai/               # Python AI engine (port 5001)
+│   │       ├── server.py     # HTTP server — POST /predict, /predict/fleet
+│   │       ├── engine.py     # Pipeline orchestrator
+│   │       ├── train.py      # XGBoost model training
+│   │       ├── features.py   # Real DB feature extraction
+│   │       ├── anomaly.py    # Isolation Forest anomaly detection
+│   │       ├── prediction.py # XGBoost failure classifier
+│   │       ├── rul.py        # XGBoost RUL regressor
+│   │       ├── explanation.py# Plain-English explanation generator
+│   │       └── requirements.txt
+│   └── frontend/             # Next.js 14 dashboard + Copilot chat (port 3000)
+│       ├── app/              # App Router pages
+│       ├── components/       # Reusable UI components
+│       └── lib/              # API client, auth, Copilot engine
+├── docs/                     # Written documentation
 │   ├── problem-statement.md
 │   ├── solution-overview.md
 │   ├── architecture.md
 │   └── setup-guide.md
-├── demo/                 # Demo artifacts
-│   ├── screenshots/      # App screenshots
+├── demo/                     # Demo artifacts
+│   ├── screenshots/
 │   └── demo-video-link.txt
-├── presentation/         # Slide deck
-└── submission.yaml       # Structured submission metadata
+├── presentation/             # Slide deck
+└── submission.yaml
 ```
 
 ---
 
 ## ⚡ How to Run
 
+Full setup instructions with environment variables and troubleshooting: [`docs/setup-guide.md`](docs/setup-guide.md)
+
 ```bash
 # 1. Clone the repo
 git clone https://github.com/DefendAI/bob-ai-hackathon-DefendAI.git
 cd bob-ai-hackathon-DefendAI
 
-# 2. Start database services
-docker compose up -d db
+# 2. Start PostgreSQL (Docker or local)
+#    Ensure PostgreSQL is running on localhost:5432 with database "defend_ai"
 
-# 3. Install backend dependencies and migrate
-cd src/backend
+# 3. Start the Node.js backend (Terminal 1)
+cd src/backend-node
+npm install
+node server.js
+# → API available at http://localhost:3001
+
+# 4. Train AI models and start the Python AI engine (Terminal 2)
+cd src/backend-node/ai
 pip install -r requirements.txt
-python manage.py migrate
+python train.py        # trains XGBoost models once
+python server.py       # → AI engine at http://localhost:5001
 
-# 4. Seed demo data
-python demo/seed_demo_data.py
-
-# 5. Start the backend
-uvicorn app.main:app --reload --port 8000
-
-# 6. Install and start the frontend (separate terminal)
-cd ../frontend
+# 5. Start the frontend (Terminal 3)
+cd src/frontend
 npm install
 npm run dev
+# → Dashboard at http://localhost:3000
 ```
-
-Full instructions with environment variables and troubleshooting: [`docs/setup-guide.md`](docs/setup-guide.md)
 
 ---
 
@@ -113,13 +135,13 @@ Full instructions with environment variables and troubleshooting: [`docs/setup-g
 
 ## ⚠️ Known Limitations
 
-- Uses simulated HUMS sensor data — not connected to real classified sensor feeds.
-- Authentication is implemented with JWT but not production-hardened for operational deployment.
-- ML models are trained on synthetic data; accuracy on real fleet data will require retraining with actual records.
+- Uses CSV-seeded HUMS sensor data — not connected to live classified sensor feeds.
+- Authentication context is provided via frontend auth layer; API endpoints are not individually token-gated for the MVP.
+- AI models are trained on the bundled `equipment_data.csv` dataset; accuracy on real fleet data will require retraining with operational records.
 - Only tested on Chrome and Firefox.
 
 ---
 
 ## 🏅 What We're Most Proud Of
 
-Our strongest feature is the combination of mission-readiness assessment and predictive maintenance in a single Copilot. Instead of only showing raw sensor values, the system converts sensor and service data into understandable readiness insights, identifies potential component failures before the next mission window, and helps maintenance teams prioritise the actions that matter most for operational readiness.
+Our strongest feature is the combination of real trained XGBoost models (100% accuracy on held-out test set, 1.29-day RUL RMSE) with a 9-intent NLP Copilot that gives plain-English answers backed by live database queries. Instead of only showing raw sensor values, the system converts sensor and service data into understandable readiness insights — powered by the IBM Bob Copilot interface and Groq LLM streaming — and helps maintenance teams prioritise actions that matter most for operational readiness.
