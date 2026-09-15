@@ -2,6 +2,8 @@ const express = require('express');
 const cors = require('cors');
 const { getPool } = require('./database');
 const { loadDataset } = require('./pipeline');
+const { handleCopilotQuery } = require('./copilot');
+const { generateMaintenancePlan } = require('./recommendation');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -427,71 +429,79 @@ app.post('/api/maintenance/feedback', async (req, res) => {
 // POST /api/copilot/query  — Natural-language question stub
 // (Member 3 will replace the body with the NLP/LLM handler)
 // ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
+// POST /api/copilot/query  — Member 3: full NLP Copilot handler
+// ---------------------------------------------------------------------------
 app.post('/api/copilot/query', async (req, res) => {
   const { question } = req.body;
   if (!question || typeof question !== 'string') {
     return res.status(400).json({ error: 'question (string) is required' });
   }
-
-  const pool = getPool();
-
-  // Simple keyword routing — Member 3 will replace with a proper NLP handler
-  const q = question.toLowerCase();
-
   try {
-    if (q.includes('not ready') || q.includes('not mission ready')) {
-      const { rows } = await pool.query(`
-        SELECT equipment_id, model, unit, mission_status
-        FROM Equipment
-        WHERE mission_status = 'NOT MISSION READY'
-      `);
-      return res.json({
-        question,
-        answer: rows.length
-          ? `Equipment not mission ready: ${rows.map(r => r.equipment_id).join(', ')}`
-          : 'No equipment is currently classified as NOT MISSION READY.',
-        data: rows,
+    const result = await handleCopilotQuery(getPool(), question);
+    res.json({ question, ...result });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// POST /api/maintenance/plan  — Member 3: generate maintenance plan from predictions
+// ---------------------------------------------------------------------------
+app.post('/api/maintenance/plan', async (req, res) => {
+  const pool = getPool();
+  try {
+    // Get latest prediction per equipment
+    const { rows: predictions } = await pool.query(`
+      SELECT DISTINCT ON (equipment_id)
+        equipment_id, risk_level, failure_probability, remaining_useful_life,
+        predicted_failure_date, explanation
+      FROM Predictions
+      ORDER BY equipment_id, created_at DESC
+    `);
+
+    if (!predictions.length) {
+      return res.status(404).json({
+        error: 'No predictions found. Run POST /api/predictions/run/fleet first.',
       });
     }
 
-    if (q.includes('maintenance required')) {
+    // Build features map from latest sensor readings
+    const featuresMap = {};
+    for (const pred of predictions) {
       const { rows } = await pool.query(`
-        SELECT equipment_id, model, unit, mission_status
-        FROM Equipment
-        WHERE mission_status IN ('MAINTENANCE REQUIRED', 'NOT MISSION READY')
-      `);
-      return res.json({
-        question,
-        answer: rows.length
-          ? `Equipment requiring maintenance: ${rows.map(r => r.equipment_id).join(', ')}`
-          : 'No equipment currently requires maintenance.',
-        data: rows,
-      });
+        SELECT temperature AS max_temperature, vibration AS max_vibration,
+               pressure AS min_pressure, battery AS min_battery,
+               (SELECT total_usage_hours FROM Equipment WHERE equipment_id = $1) AS total_usage_hours
+        FROM SensorReadings WHERE equipment_id = $1
+        ORDER BY timestamp DESC LIMIT 1
+      `, [pred.equipment_id]);
+      if (rows[0]) featuresMap[pred.equipment_id] = rows[0];
     }
 
-    if (q.includes('alert') || q.includes('critical')) {
-      const { rows } = await pool.query(`
-        SELECT equipment_id, alert_type, severity, message
-        FROM Alerts
-        WHERE acknowledged = FALSE AND severity IN ('Critical', 'High')
-        ORDER BY created_at DESC
-        LIMIT 10
-      `);
-      return res.json({
-        question,
-        answer: rows.length
-          ? `Active critical/high alerts: ${rows.length}`
-          : 'No critical or high-severity alerts are active.',
-        data: rows,
-      });
+    const plan = generateMaintenancePlan(predictions, featuresMap);
+
+    // Persist generated tasks to DB (skip duplicates)
+    for (const task of plan.tasks) {
+      const existing = await pool.query(`
+        SELECT task_id FROM MaintenanceTasks
+        WHERE equipment_id = $1 AND task_type = $2 AND status = 'Pending'
+        LIMIT 1
+      `, [task.equipment_id, task.task_type]);
+
+      if (!existing.rows.length) {
+        await pool.query(`
+          INSERT INTO MaintenanceTasks
+            (equipment_id, component_id, task_type, priority, recommended_action, estimated_downtime)
+          VALUES ($1, $2, $3, $4, $5, $6)
+        `, [
+          task.equipment_id, task.component_id, task.task_type,
+          task.priority, task.recommended_action, task.estimated_downtime,
+        ]);
+      }
     }
 
-    // Fallback
-    return res.json({
-      question,
-      answer: 'I can answer questions about readiness, alerts, and maintenance. Try asking "Which vehicles are not mission ready?" or "Show active alerts".',
-      data: null,
-    });
+    res.json({ generated_at: new Date().toISOString(), ...plan });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
