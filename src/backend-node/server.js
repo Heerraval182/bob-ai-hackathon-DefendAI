@@ -564,10 +564,59 @@ app.get('/api/reports/readiness', async (req, res) => {
 });
 
 // ---------------------------------------------------------------------------
+// POST /api/predictions/run  — trigger the Python AI engine (Member 2)
+// POST /api/predictions/run/fleet  — run predictions for all equipment
+// ---------------------------------------------------------------------------
+
+const AI_ENGINE_URL = process.env.AI_ENGINE_URL || 'http://localhost:5001';
+
+app.post('/api/predictions/run', async (req, res) => {
+  const { equipment_id } = req.body;
+  if (!equipment_id || typeof equipment_id !== 'string') {
+    return res.status(400).json({ error: 'Valid equipment_id (string) is required' });
+  }
+  try {
+    const aiRes = await fetch(`${AI_ENGINE_URL}/predict`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ equipment_id }),
+    });
+    const data = await aiRes.json();
+    if (!aiRes.ok) return res.status(aiRes.status).json(data);
+    res.json(data);
+  } catch (err) {
+    res.status(503).json({
+      error: 'AI engine unavailable',
+      detail: err.message,
+      hint: 'Start the Python AI engine: cd src/backend-node && python ai/server.py',
+    });
+  }
+});
+
+app.post('/api/predictions/run/fleet', async (req, res) => {
+  try {
+    const aiRes = await fetch(`${AI_ENGINE_URL}/predict/fleet`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: '{}',
+    });
+    const data = await aiRes.json();
+    if (!aiRes.ok) return res.status(aiRes.status).json(data);
+    res.json(data);
+  } catch (err) {
+    res.status(503).json({
+      error: 'AI engine unavailable',
+      detail: err.message,
+      hint: 'Start the Python AI engine: cd src/backend-node && python ai/server.py',
+    });
+  }
+});
+
+// ---------------------------------------------------------------------------
 // Start server
 // ---------------------------------------------------------------------------
 app.listen(PORT, async () => {
-  console.log(`Member 1 Backend running on http://localhost:${PORT}`);
+  console.log(`DefendAI Backend running on http://localhost:${PORT}`);
   try {
     await loadDataset();
   } catch (e) {

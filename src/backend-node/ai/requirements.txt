@@ -1,0 +1,7 @@
+# Member 2 — AI Engine dependencies
+# Install with: pip install -r requirements.txt
+
+psycopg2-binary>=2.9
+scikit-learn>=1.4
+xgboost>=2.0
+numpy>=1.26
