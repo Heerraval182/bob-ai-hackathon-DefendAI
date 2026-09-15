@@ -1,4 +1,4 @@
-https://your-live-demo-url-here.com
+https://defendai.netlify.app
 
 Replace the URL above with a link to your live/deployed demo.
 
