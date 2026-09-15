@@ -6,74 +6,92 @@
 
 Before you begin, ensure you have the following installed:
 
-- [ ] [e.g., Python 3.11+]
-- [ ] [e.g., Node.js 18+]
-- [ ] [e.g., Docker Desktop]
-- [ ] [e.g., An IBM Cloud account with watsonx.ai access]
+- [ ] Python 3.11+
+- [ ] Node.js 18+
+- [ ] Docker Desktop (for running PostgreSQL and TimescaleDB)
+- [ ] Git
 
 ## Environment Variables
 
 Copy `.env.example` to `.env` and fill in the values:
 
 ```bash
-cp .env.example .env
+cp src/.env.example src/.env
 ```
 
 | Variable | Description | Required |
 |---|---|---|
-| `WATSONX_API_KEY` | Your IBM watsonx.ai API key | Yes |
-| `WATSONX_PROJECT_ID` | Your watsonx.ai project ID | Yes |
-| `DATABASE_URL` | PostgreSQL connection string | Yes |
-| `SLACK_WEBHOOK_URL` | Slack webhook for alerts | No |
+| `DATABASE_URL` | PostgreSQL connection string (e.g. `postgresql://user:pass@localhost:5432/defendai`) | Yes |
+| `TIMESCALE_URL` | TimescaleDB connection string for sensor data | Yes |
+| `SECRET_KEY` | Secret key for JWT auth tokens | Yes |
+| `IBM_BOB_API_KEY` | IBM Bob API key for Copilot integration | Yes |
+| `DEBUG` | Set to `true` for development mode | No |
 
 ## Installation
 
 ```bash
 # 1. Clone the repository
-git clone https://github.com/[your-org]/[your-repo].git
-cd [your-repo]
+git clone https://github.com/DefendAI/bob-ai-hackathon-DefendAI.git
+cd bob-ai-hackathon-DefendAI
 
-# 2. Install backend dependencies
-[your command — e.g.: pip install -r requirements.txt]
+# 2. Start the database services
+docker compose up -d db
 
-# 3. Install frontend dependencies (if applicable)
-[your command — e.g.: cd frontend && npm install]
+# 3. Install backend dependencies
+cd src/backend
+pip install -r requirements.txt
 
-# 4. Set up the database (if applicable)
-[your command — e.g.: python manage.py migrate]
+# 4. Run database migrations
+python manage.py migrate
+
+# 5. Install frontend dependencies
+cd ../frontend
+npm install
 ```
 
 ## Running the Application
 
 ```bash
-# Start the backend
-[your command — e.g.: uvicorn app.main:app --reload]
+# Start the backend API (from src/backend/)
+uvicorn app.main:app --reload --port 8000
 
-# Start the frontend (in a separate terminal, if applicable)
-[your command — e.g.: cd frontend && npm run dev]
+# Start the frontend (in a separate terminal, from src/frontend/)
+npm run dev
 ```
 
-The application will be available at: `http://localhost:[PORT]`
+The application will be available at: `http://localhost:3000`
+
+The API will be available at: `http://localhost:8000`
+
+API documentation (Swagger UI): `http://localhost:8000/docs`
+
+## Seeding Demo Data
+
+To populate the system with simulated HUMS sensor data and equipment records:
+
+```bash
+# From src/backend/
+python demo/seed_demo_data.py
+```
+
+This loads a fleet of simulated aircraft and vehicle records, sensor readings, and maintenance history so the dashboard shows realistic readiness statuses and alerts immediately.
 
 ## Running Tests
 
 ```bash
-[your test command — e.g.: pytest tests/ -v]
-```
+# Backend tests (from src/backend/)
+pytest tests/ -v
 
-## Quick Demo (Optional)
-
-If you have a demo script or sample data to showcase the project quickly:
-
-```bash
-[e.g.: python demo/seed_demo_data.py]
-[e.g.: open http://localhost:8000/demo]
+# Frontend tests (from src/frontend/)
+npm run test
 ```
 
 ## Troubleshooting
 
 | Issue | Solution |
 |---|---|
-| [e.g., `ModuleNotFoundError`] | [e.g., Run `pip install -r requirements.txt` again] |
-| [e.g., Database connection refused] | [e.g., Ensure PostgreSQL is running: `docker compose up db`] |
-| [e.g., watsonx.ai 401 error] | [e.g., Check `WATSONX_API_KEY` in your `.env` file] |
+| `ModuleNotFoundError` on startup | Run `pip install -r requirements.txt` again inside `src/backend/` |
+| Database connection refused | Ensure Docker is running and the DB container is up: `docker compose up -d db` |
+| Frontend shows blank page | Check that the backend is running on port 8000 and `NEXT_PUBLIC_API_URL` is set correctly |
+| IBM Bob Copilot not responding | Check `IBM_BOB_API_KEY` in your `.env` file is valid |
+| Port 8000 already in use | Change the port: `uvicorn app.main:app --reload --port 8001` and update the frontend env accordingly |

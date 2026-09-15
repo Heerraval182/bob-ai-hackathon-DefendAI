@@ -1,47 +1,54 @@
 # Source Code
 
-Place all your project's source code in this folder.
+All source code for the Mission Readiness & Predictive Maintenance Copilot lives in this folder.
 
-## Structure Guidelines
+## Structure
 
-Organize your code logically. Here are common patterns — use whatever fits
-your project:
-
-### Web Application
 ```
 src/
-  backend/        ← API server code
-  frontend/       ← UI code
-  shared/         ← Shared utilities/types
+├── backend/            ← Python FastAPI backend
+│   ├── app/
+│   │   ├── main.py           ← Application entry point
+│   │   ├── routers/          ← API route handlers (sensors, equipment, alerts, maintenance, copilot)
+│   │   ├── models/           ← SQLAlchemy data models
+│   │   ├── schemas/          ← Pydantic request/response schemas
+│   │   ├── services/         ← Business logic (ingestion, prediction, recommendation)
+│   │   └── ml/               ← ML model training and inference
+│   │       ├── anomaly.py         ← Isolation Forest anomaly detection
+│   │       ├── failure_pred.py    ← XGBoost failure prediction
+│   │       ├── rul.py             ← Remaining Useful Life estimation
+│   │       └── readiness.py       ← Readiness scoring engine
+│   ├── demo/
+│   │   └── seed_demo_data.py ← Populates the DB with simulated fleet data
+│   ├── tests/            ← Pytest test suite
+│   ├── requirements.txt
+│   └── .env.example
+│
+├── frontend/           ← Next.js / React dashboard
+│   ├── pages/
+│   │   ├── index.tsx         ← Fleet readiness overview
+│   │   ├── equipment/        ← Individual asset health pages
+│   │   ├── alerts.tsx        ← Active alerts
+│   │   ├── maintenance.tsx   ← Maintenance recommendations
+│   │   └── copilot.tsx       ← Natural-language Copilot chat
+│   ├── components/       ← Reusable UI components
+│   ├── public/
+│   ├── package.json
+│   └── .env.example
+│
+└── .env.example        ← Top-level environment variable template
 ```
 
-### Data / AI Project
-```
-src/
-  data/           ← Data ingestion / preprocessing
-  models/         ← ML model code
-  api/            ← Serving layer
-  notebooks/      ← Jupyter notebooks (exploration)
-```
+## Key Files
 
-### CLI / Script-based Tool
-```
-src/
-  cli/            ← CLI entry points
-  lib/            ← Core logic
-  utils/          ← Helpers
-```
+- `backend/requirements.txt` — Python dependency manifest
+- `backend/.env.example` — Backend environment variable template
+- `frontend/package.json` — Node.js dependency manifest
+- `frontend/.env.example` — Frontend environment variable template
 
-## Important Files to Include
-
-- `requirements.txt` or `package.json` — dependency manifest
-- `.env.example` — template for environment variables (NEVER commit `.env`)
-- Any database migration files
-- Configuration files
-
-## What NOT to Include in src/
+## What NOT to Commit
 
 - `.env` files with real secrets
-- Large binary files (use Git LFS or link externally)
-- `node_modules/` or `venv/` (these are in `.gitignore`)
-- Build artifacts (`dist/`, `build/`, `__pycache__/`)
+- `node_modules/` or `.venv/` directories
+- Build artefacts (`dist/`, `build/`, `__pycache__/`)
+- Large binary or model weight files (use Git LFS or link externally)

@@ -4,27 +4,30 @@ Place your slide deck in this folder.
 
 ## Accepted Formats
 
-  slides.pdf      ← Preferred (universally viewable)
-  slides.pptx     ← Acceptable
-  slides.key      ← Acceptable (macOS Keynote)
+```
+slides.pdf      ← Preferred (universally viewable)
+slides.pptx     ← Acceptable
+slides.key      ← Acceptable (macOS Keynote)
+```
 
-Rename your file to `slides.pdf` (or `slides.pptx`) so the evaluation
-pipeline can locate it reliably.
+Rename your file to `slides.pdf` (or `slides.pptx`) so the evaluation pipeline can locate it reliably.
 
-## Recommended Slide Structure (5–8 slides)
+## Recommended Slide Structure (7–8 slides)
 
-  Slide 1: Title — Project name, team name, track
-  Slide 2: Problem — What problem? Who has it? Why does it matter?
-  Slide 3: Solution — What you built in one clear diagram or screenshot
-  Slide 4: Architecture — How the system works technically
-  Slide 5: Demo / Key Feature — Screenshot or flow of your best feature
-  Slide 6: IBM Technologies — Specifically how you used them
-  Slide 7: Results / Impact — What does success look like? Any metrics?
-  Slide 8: Team — Names, roles, what each person built
+```
+Slide 1: Title — Mission Readiness & Predictive Maintenance Copilot · Team DefendAI · AI Track
+Slide 2: Problem — Fixed-schedule maintenance leaves HUMS data unused; unexpected failures reduce mission readiness
+Slide 3: Solution — AI-powered readiness scoring + predictive failure detection + Copilot assistant
+Slide 4: Architecture — Layered pipeline diagram (Ingestion → Processing → AI → Readiness → Dashboard)
+Slide 5: Key Features — Readiness levels, failure prediction, RUL estimation, maintenance prioritisation
+Slide 6: IBM Bob Integration — How the Copilot chat interface is built on IBM Bob
+Slide 7: Demo — Screenshots of fleet dashboard, alert list, and Copilot chat in action
+Slide 8: Team — Maitrey, Himanshu, Heer, Mejbin — roles and contributions
+```
 
 ## Tips
 
-- Keep slides visual — diagrams beat bullet points
+- Keep slides visual — architecture diagram and readiness-status screenshots beat bullet points
 - One idea per slide
 - Font size minimum 24pt for readability
-- Do not paste large code blocks into slides — reference the repo instead
+- Reference the repo instead of pasting large code blocks into slides

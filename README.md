@@ -1,7 +1,4 @@
-# 🚀 Mission Readiness & Predictive Maintenance
-Copilot
-
-> ⚠️ **Replace everything in `[ ]` brackets with your actual content before submission.**
+# 🚀 Mission Readiness & Predictive Maintenance Copilot
 
 ---
 
@@ -18,25 +15,23 @@ Copilot
 
 ## 🎯 Problem Statement
 
-> In 2–3 sentences: What problem does your project solve? Who experiences this problem?
-
 Military organisations need to know whether aircraft, vehicles, and other equipment are truly mission-ready, but maintenance is often based on fixed schedules rather than actual component condition. HUMS sensor data and service records that could reveal early signs of failure often remain underused, leading to unexpected breakdowns, reduced operational readiness, and longer recovery times.
+
 ---
 
 ## 💡 Solution
 
-> In 2–3 sentences: What did you build? How does it solve the problem above?
-
 We built a Mission Readiness & Predictive Maintenance Copilot that analyses HUMS sensor data and historical service records to identify assets that are not mission-ready and explain the reasons behind their readiness status. The system predicts components that may fail before the next mission window and generates a prioritised maintenance plan so maintenance teams can focus on the most critical assets first.
+
 ---
 
 ## ✨ Key Features
 
-Asset Readiness Assessment: Evaluates aircraft, vehicles, and equipment to identify assets that are mission-ready, at-risk, or non-ready.
-Readiness Issue Explanation: Explains the sensor or service-record factors responsible for an asset being classified as non-ready or at-risk.
-Predictive Failure Detection: Analyses HUMS sensor data and historical maintenance records to identify components that are likely to fail before the next mission window.
-Maintenance Prioritisation: Ranks maintenance requirements based on asset condition, predicted failure risk, mission importance, and urgency.
-Copilot Assistance: Provides a conversational interface for querying asset health, understanding failure risks, and obtaining maintenance recommendations.
+- **Asset Readiness Assessment**: Evaluates aircraft, vehicles, and equipment to identify assets that are mission-ready, at-risk, or non-ready.
+- **Readiness Issue Explanation**: Explains the sensor or service-record factors responsible for an asset being classified as non-ready or at-risk.
+- **Predictive Failure Detection**: Analyses HUMS sensor data and historical maintenance records to identify components that are likely to fail before the next mission window.
+- **Maintenance Prioritisation**: Ranks maintenance requirements based on asset condition, predicted failure risk, mission importance, and urgency.
+- **Copilot Assistance**: Provides a conversational interface for querying asset health, understanding failure risks, and obtaining maintenance recommendations.
 
 ---
 
@@ -44,11 +39,12 @@ Copilot Assistance: Provides a conversational interface for querying asset healt
 
 | Category | Technologies |
 |---|---|
-| **Languages** | [e.g., Python, TypeScript] |
-| **Frameworks** | [e.g., FastAPI, React] |
-| **IBM Technologies** | [e.g., watsonx.ai, IBM Bob, IBM Cloud] |
-| **Databases** | [e.g., PostgreSQL, Redis] |
-| **Other** | [e.g., Docker, GitHub Actions] |
+| **Languages** | Python, TypeScript |
+| **Frameworks** | FastAPI (backend), React / Next.js (frontend) |
+| **IBM Technologies** | IBM Bob (natural-language Copilot interface) |
+| **Databases** | PostgreSQL (structured data), TimescaleDB (sensor time-series) |
+| **AI / ML** | Scikit-learn, XGBoost, Pandas, NumPy |
+| **Other** | Docker, Tailwind CSS, Chart.js |
 
 ---
 
@@ -56,6 +52,9 @@ Copilot Assistance: Provides a conversational interface for querying asset healt
 
 ```
 ├── src/                  # All source code
+│   ├── backend/          # FastAPI backend, ML models, recommendation engine
+│   ├── frontend/         # Next.js dashboard + Copilot chat interface
+│   └── .env.example      # Environment variable template
 ├── docs/                 # Written documentation
 │   ├── problem-statement.md
 │   ├── solution-overview.md
@@ -63,7 +62,7 @@ Copilot Assistance: Provides a conversational interface for querying asset healt
 │   └── setup-guide.md
 ├── demo/                 # Demo artifacts
 │   ├── screenshots/      # App screenshots
-│   └── demo-video-link.txt  # Link to demo video
+│   └── demo-video-link.txt
 ├── presentation/         # Slide deck
 └── submission.yaml       # Structured submission metadata
 ```
@@ -72,24 +71,32 @@ Copilot Assistance: Provides a conversational interface for querying asset healt
 
 ## ⚡ How to Run
 
-> **Copy these exact steps from your [`docs/setup-guide.md`](docs/setup-guide.md)**
-
-
 ```bash
 # 1. Clone the repo
-git clone https://github.com/[your-repo].git
-cd [your-repo]
+git clone https://github.com/DefendAI/bob-ai-hackathon-DefendAI.git
+cd bob-ai-hackathon-DefendAI
 
-# 2. Install dependencies
-[your install command here]
+# 2. Start database services
+docker compose up -d db
 
-# 3. Configure environment
-cp .env.example .env
-# Edit .env with your values
+# 3. Install backend dependencies and migrate
+cd src/backend
+pip install -r requirements.txt
+python manage.py migrate
 
-# 4. Run the project
-[your run command here]
+# 4. Seed demo data
+python demo/seed_demo_data.py
+
+# 5. Start the backend
+uvicorn app.main:app --reload --port 8000
+
+# 6. Install and start the frontend (separate terminal)
+cd ../frontend
+npm install
+npm run dev
 ```
+
+Full instructions with environment variables and troubleshooting: [`docs/setup-guide.md`](docs/setup-guide.md)
 
 ---
 
@@ -100,21 +107,19 @@ cp .env.example .env
 | 📹 Demo Video | [See demo/demo-video-link.txt](demo/demo-video-link.txt) |
 | 🌐 Live Demo | [See demo/live-demo-url.txt](demo/live-demo-url.txt) |
 | 🖼️ Screenshots | [See demo/screenshots/](demo/screenshots/) |
-| 📊 Presentation | [See presentation/slides.pdf](presentation/) |
+| 📊 Presentation | [See presentation/](presentation/) |
 
 ---
 
 ## ⚠️ Known Limitations
 
-> Be honest — judges appreciate transparency over overclaiming.
-
-- [Limitation 1: e.g., "Authentication is mocked — not production-ready"]
-- [Limitation 2: e.g., "Only tested on Chrome"]
-- [Limitation 3: e.g., "Feature X is scaffolded but not fully implemented"]
+- Uses simulated HUMS sensor data — not connected to real classified sensor feeds.
+- Authentication is implemented with JWT but not production-hardened for operational deployment.
+- ML models are trained on synthetic data; accuracy on real fleet data will require retraining with actual records.
+- Only tested on Chrome and Firefox.
 
 ---
 
 ## 🏅 What We're Most Proud Of
 
 Our strongest feature is the combination of mission-readiness assessment and predictive maintenance in a single Copilot. Instead of only showing raw sensor values, the system converts sensor and service data into understandable readiness insights, identifies potential component failures before the next mission window, and helps maintenance teams prioritise the actions that matter most for operational readiness.
----
