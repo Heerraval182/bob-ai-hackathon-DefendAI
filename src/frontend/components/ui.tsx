@@ -6,10 +6,16 @@ type Sev    = "INFO"|"WARNING"|"CRITICAL";
 type Prio   = "CRITICAL"|"HIGH"|"MEDIUM"|"LOW";
 
 const SC: Record<Status, string> = {
-  "MISSION READY":        "bg-emerald-50 text-emerald-700 border border-emerald-200 ring-1 ring-emerald-100",
-  "READY WITH WARNING":   "bg-amber-50 text-amber-700 border border-amber-200 ring-1 ring-amber-100",
-  "MAINTENANCE REQUIRED": "bg-orange-50 text-orange-700 border border-orange-200 ring-1 ring-orange-100",
-  "NOT MISSION READY":    "bg-red-50 text-red-700 border border-red-200 ring-1 ring-red-100",
+  "MISSION READY":        "bg-emerald-50 text-emerald-700 border border-emerald-200",
+  "READY WITH WARNING":   "bg-amber-50 text-amber-700 border border-amber-200",
+  "MAINTENANCE REQUIRED": "bg-orange-50 text-orange-700 border border-orange-200",
+  "NOT MISSION READY":    "bg-red-50 text-red-700 border border-red-200",
+};
+const SD: Record<Status, string> = {
+  "MISSION READY":        "bg-emerald-500",
+  "READY WITH WARNING":   "bg-amber-400",
+  "MAINTENANCE REQUIRED": "bg-orange-400",
+  "NOT MISSION READY":    "bg-red-500",
 };
 const RC: Record<Risk, string> = {
   LOW:      "bg-emerald-50 text-emerald-700 border border-emerald-200",
@@ -28,38 +34,43 @@ const PC: Record<Prio, string> = {
   MEDIUM:   "bg-amber-50 text-amber-700 border border-amber-200",
   LOW:      "bg-slate-50 text-slate-600 border border-slate-200",
 };
+const RD: Record<Risk, string> = {
+  LOW: "bg-emerald-500", MEDIUM: "bg-amber-500", HIGH: "bg-orange-500", CRITICAL: "bg-red-500",
+};
 
 export function StatusBadge({ status }: { status: Status }) {
   return (
-    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-semibold tracking-wide ${SC[status]}`}>
+    <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold tracking-wide ${SC[status]}`}>
+      <span className={`w-1.5 h-1.5 rounded-full ${SD[status]}`} />
       {status}
     </span>
   );
 }
 
 export function RiskBadge({ risk }: { risk: Risk }) {
-  const dot: Record<Risk, string> = {
-    LOW: "bg-emerald-500", MEDIUM: "bg-amber-500", HIGH: "bg-orange-500", CRITICAL: "bg-red-500",
-  };
   return (
-    <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-semibold ${RC[risk]}`}>
-      <span className={`w-1.5 h-1.5 rounded-full ${dot[risk]}`} />
+    <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold ${RC[risk]}`}>
+      <span className={`w-1.5 h-1.5 rounded-full ${RD[risk]}`} />
       {risk}
     </span>
   );
 }
 
 export function SeverityBadge({ severity }: { severity: Sev }) {
+  const dot: Record<Sev, string> = { INFO: "bg-sky-500", WARNING: "bg-amber-500", CRITICAL: "bg-red-500" };
   return (
-    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-semibold ${SeC[severity]}`}>
+    <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold ${SeC[severity]}`}>
+      <span className={`w-1.5 h-1.5 rounded-full ${dot[severity]}`} />
       {severity}
     </span>
   );
 }
 
 export function PriorityBadge({ priority }: { priority: Prio }) {
+  const dot: Record<Prio, string> = { CRITICAL: "bg-red-500", HIGH: "bg-orange-500", MEDIUM: "bg-amber-500", LOW: "bg-slate-400" };
   return (
-    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-semibold ${PC[priority]}`}>
+    <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold ${PC[priority]}`}>
+      <span className={`w-1.5 h-1.5 rounded-full ${dot[priority]}`} />
       {priority}
     </span>
   );
@@ -67,7 +78,7 @@ export function PriorityBadge({ priority }: { priority: Prio }) {
 
 export function Card({ children, className }: { children: React.ReactNode; className?: string }) {
   return (
-    <div className={`bg-white rounded-2xl border border-slate-200/80 shadow-sm ${className ?? ""}`}>
+    <div className={`bg-white rounded-2xl border border-slate-200/80 shadow-sm hover:shadow-md transition-shadow ${className ?? ""}`}>
       {children}
     </div>
   );
@@ -103,23 +114,21 @@ export function ReadinessBar({ score }: { score: number }) {
     score >= 65 ? "bg-amber-400"   :
     score >= 40 ? "bg-orange-400"  :
                   "bg-red-500";
-  const glow =
-    score >= 85 ? "shadow-emerald-200" :
-    score >= 65 ? "shadow-amber-200"   :
-    score >= 40 ? "shadow-orange-200"  :
-                  "shadow-red-200";
+  const textColor =
+    score >= 85 ? "text-emerald-600" :
+    score >= 65 ? "text-amber-500"   :
+    score >= 40 ? "text-orange-500"  :
+                  "text-red-500";
 
   return (
     <div className="flex items-center gap-2.5">
-      <div className="flex-1 h-2 bg-slate-100 rounded-full overflow-hidden">
+      <div className="flex-1 h-1.5 bg-slate-100 rounded-full overflow-hidden">
         <div
-          className={`h-2 rounded-full transition-all duration-500 shadow-sm ${color} ${glow}`}
+          className={`h-full rounded-full transition-all duration-500 ${color}`}
           style={{ width: `${score}%` }}
         />
       </div>
-      <span className={`text-xs font-bold w-8 text-right ${
-        score >= 85 ? "text-emerald-600" : score >= 65 ? "text-amber-500" : score >= 40 ? "text-orange-500" : "text-red-500"
-      }`}>{score}%</span>
+      <span className={`text-xs font-bold w-8 text-right tabular-nums ${textColor}`}>{score}%</span>
     </div>
   );
 }
@@ -130,26 +139,28 @@ export function StatCard({
   sub,
   color,
   icon,
+  iconBg,
 }: {
   label: string;
   value: string | number;
   sub?: string;
   color?: string;
   icon?: React.ReactNode;
+  iconBg?: string;
 }) {
   return (
-    <Card>
+    <Card className="group cursor-default">
       <div className="p-5">
-        <div className="flex items-start justify-between mb-3">
-          <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">{label}</p>
+        <div className="flex items-start justify-between mb-4">
+          <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider leading-tight">{label}</p>
           {icon && (
-            <div className="w-8 h-8 rounded-lg bg-slate-50 border border-slate-100 flex items-center justify-center text-slate-400">
+            <div className={`w-9 h-9 rounded-xl flex items-center justify-center ${iconBg ?? "bg-slate-50 border border-slate-100"}`}>
               {icon}
             </div>
           )}
         </div>
-        <p className={`text-3xl font-bold tracking-tight ${color ?? "text-slate-800"}`}>{value}</p>
-        {sub && <p className="text-xs text-slate-400 mt-1">{sub}</p>}
+        <p className={`text-3xl font-black tracking-tight tabular-nums ${color ?? "text-slate-800"}`}>{value}</p>
+        {sub && <p className="text-xs text-slate-400 mt-1.5 font-medium">{sub}</p>}
       </div>
     </Card>
   );
