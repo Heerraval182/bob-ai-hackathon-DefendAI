@@ -79,10 +79,14 @@ def run_prediction_engine(conn, equipment_id: str) -> dict[str, Any]:
     anomaly = detect_anomaly(features)
 
     # 3. Failure prediction
-    pred = predict_failure(features, model_path=_XGB_MODEL_PATH)
+    pred = predict_failure(features)
 
-    # 4. RUL
-    rul = estimate_rul(features, pred["failure_probability"])
+    # 4. RUL — pass real XGBoost RUL cycles if available
+    rul = estimate_rul(
+        features,
+        pred["failure_probability"],
+        predicted_rul_cycles=pred.get("predicted_rul_cycles"),
+    )
 
     # 5. Explanation
     explanation = generate_explanation(
@@ -139,6 +143,7 @@ def run_prediction_engine(conn, equipment_id: str) -> dict[str, Any]:
         "mission_status":          mission_status,
         "anomaly_detected":        anomaly["is_anomaly"],
         "anomaly_score":           anomaly["anomaly_score"],
+        "method":                  pred["method"],
         "explanation":             explanation,
     }
 

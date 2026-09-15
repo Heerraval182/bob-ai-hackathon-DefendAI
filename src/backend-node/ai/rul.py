@@ -1,20 +1,12 @@
 """
 Member 2 — Remaining Useful Life (RUL) Estimation
 ===================================================
-Estimates the number of days until a component is predicted to fail,
-based on the current failure probability and operational context.
+Converts the XGBoost-predicted RUL (in CMAPSS cycles) to calendar days
+and a predicted failure date for display in the dashboard.
 
-Sourced from docs/architecture.md § 4.4 AI Prediction Engine:
-  "Predict remaining useful life"
-  "Regression or time-series models for remaining useful life"
-
-Uses a degradation-rate model:
-  RUL = (1 - failure_probability) / daily_degradation_rate
-
-Daily degradation rate is estimated from:
-  - Usage hours per day (proxy for wear rate)
-  - Vibration trend direction (rising = faster degradation)
-  - Days since last service (deferred maintenance = faster degradation)
+One CMAPSS cycle ≈ one flight mission. We use a configurable
+HOURS_PER_CYCLE to convert cycles to real days based on fleet
+operating tempo (default 1 cycle = 1 operational day).
 """
 
 from __future__ import annotations
@@ -22,39 +14,51 @@ from __future__ import annotations
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
-
-# ---------------------------------------------------------------------------
-# Constants
-# ---------------------------------------------------------------------------
-
-# Baseline daily degradation rate (fraction of remaining life consumed per day)
-# at nominal operating conditions.
-_BASE_DAILY_RATE = 0.005          # ~200 days at 0% failure prob → 100% at nominal
-
-_HOURS_PER_DAY_NOMINAL = 4.0      # assumed operating hours/day for the fleet
-
-# Multipliers applied to the base rate based on sensor conditions
-_VIB_TREND_MULTIPLIER   = 1.5     # rising vibration → 50% faster wear
-_HIGH_USAGE_MULTIPLIER  = 1.3     # >1500 h total → faster wear
-_DEFERRED_SVC_MULTIPLIER = 1.2    # >30 days since service → faster wear
+# 1 CMAPSS cycle ≈ 1 operational day (adjustable via env var)
+import os
+CYCLE_TO_DAYS = float(os.environ.get("CYCLE_TO_DAYS", "1.0"))
 
 
 def estimate_rul(
     features: dict[str, Any],
     failure_probability: float,
+    predicted_rul_cycles: int | None = None,
 ) -> dict[str, Any]:
     """
     Returns:
         {
-          "remaining_useful_life_days": int,      # estimated days until failure
-          "predicted_failure_date":     str,       # ISO-8601 date string
-          "rul_confidence":             str,       # "high" | "medium" | "low"
+          "remaining_useful_life_days": int,
+          "predicted_failure_date":     str,   # ISO-8601
+          "rul_confidence":             str,   # "high" | "medium" | "low"
         }
 
-    Edge cases:
-      - failure_probability >= 0.95 → RUL = 0 (effectively failed)
-      - failure_probability <= 0.05 → RUL = 365 (capped, considered healthy)
+    Uses XGBoost-predicted RUL cycles when available (real model output).
+    Falls back to probability-based estimate only when model is not loaded.
     """
+    # --- Use real XGBoost RUL output ---
+    if predicted_rul_cycles is not None:
+        rul_days = max(0, int(predicted_rul_cycles * CYCLE_TO_DAYS))
+        rul_days = min(rul_days, 730)    # cap at 2 years
+
+        predicted_failure_date = (
+            datetime.now(timezone.utc) + timedelta(days=rul_days)
+        ).date().isoformat()
+
+        # Confidence based on failure probability distance from boundary
+        if failure_probability >= 0.65 or failure_probability <= 0.10:
+            rul_confidence = "high"
+        elif failure_probability >= 0.35:
+            rul_confidence = "medium"
+        else:
+            rul_confidence = "low"
+
+        return {
+            "remaining_useful_life_days": rul_days,
+            "predicted_failure_date":     predicted_failure_date,
+            "rul_confidence":             rul_confidence,
+        }
+
+    # --- Fallback: probability-based estimate (no model loaded) ---
     if failure_probability >= 0.95:
         return {
             "remaining_useful_life_days": 0,
@@ -70,32 +74,13 @@ def estimate_rul(
             "rul_confidence":             "low",
         }
 
-    # Compute daily degradation rate with multipliers
-    rate = _BASE_DAILY_RATE
-
-    if features.get("vibration_trend", 0.0) > 0.1:
-        rate *= _VIB_TREND_MULTIPLIER
-
-    if features.get("total_usage_hours", 0.0) >= 1500:
-        rate *= _HIGH_USAGE_MULTIPLIER
-
-    if features.get("days_since_last_service", 0.0) >= 30:
-        rate *= _DEFERRED_SVC_MULTIPLIER
-
-    # Remaining life fraction = 1 - failure_probability
-    remaining_fraction = 1.0 - failure_probability
-
-    # RUL in days
-    rul_days = max(0, int(remaining_fraction / rate))
-
-    # Cap at 365 days — predictions beyond a year are unreliable
+    # Linear interpolation between 0 and 200 days
+    rul_days = max(0, int((1.0 - failure_probability) * 200))
     rul_days = min(rul_days, 365)
-
     predicted_failure_date = (
         datetime.now(timezone.utc) + timedelta(days=rul_days)
     ).date().isoformat()
 
-    # Confidence: higher when failure probability is definitive (not borderline)
     if failure_probability >= 0.60 or failure_probability <= 0.15:
         rul_confidence = "high"
     elif failure_probability >= 0.35:

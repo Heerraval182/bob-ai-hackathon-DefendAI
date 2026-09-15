@@ -95,3 +95,8 @@ logs/
 .terraform/
 *.tfstate
 *.tfstate.backup
+
+# AI model binaries and downloaded datasets
+src/backend-node/ai/models/
+src/backend-node/ai/cmapss_data/
+*.pkl

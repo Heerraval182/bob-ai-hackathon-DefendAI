@@ -1,70 +1,66 @@
 """
-Member 2 — AI Prediction Engine
+Member 2 — Feature Extraction
 ================================
-Feature extraction from the SensorReadings + Equipment tables.
+Queries SensorReadings + Equipment from the real DB schema
+(as defined in database.js) and returns a flat feature dict.
 
-Sourced from docs/architecture.md § 4.3 Data Processing Layer:
-  "Generate features such as: average temperature, vibration trend,
-   pressure deviation, usage hours, failure frequency, time since last service"
+DB columns in SensorReadings:
+  reading_id, equipment_id, component_id, sensor_type,
+  temperature, vibration, pressure, battery, timestamp
+
+DB columns in Equipment:
+  equipment_id, equipment_type, model, unit, mission_status,
+  last_service_date, total_usage_hours
 """
 
 from __future__ import annotations
 
+import os
+import sys
 from datetime import datetime, timezone
 from typing import Any
 
-import psycopg2
-
-
-# ---------------------------------------------------------------------------
-# Sensor safe-range thresholds (from server.js computeReadiness + docs)
-# ---------------------------------------------------------------------------
-THRESHOLDS = {
-    "temperature": {"warn": 85.0, "critical": 100.0},
-    "vibration":   {"warn": 0.6,  "critical": 1.0},
-    "pressure":    {"warn": 35.0, "critical": 30.0},   # low pressure is bad
-    "battery":     {"warn": 25.0, "critical": 10.0},   # low battery is bad
-}
-
-USAGE_HOURS_WARN     = 1500
-USAGE_HOURS_CRITICAL = 2500
-SERVICE_DAYS_WARN    = 30
-SERVICE_DAYS_CRITICAL = 90
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 
 def extract_features(conn, equipment_id: str) -> dict[str, Any]:
     """
-    Query the database and return a flat feature dict for one asset.
+    Returns a flat feature dict for one asset derived from real DB data.
 
-    Features produced (per docs/architecture.md § 4.3):
-      avg_temperature, max_temperature
-      avg_vibration,   max_vibration,  vibration_trend
-      avg_pressure,    min_pressure
-      avg_battery,     min_battery
-      total_usage_hours
-      days_since_last_service
+    Features:
+      avg_temperature, max_temperature,
+      avg_vibration,   max_vibration,  vibration_trend,
+      avg_pressure,    min_pressure,
+      avg_battery,     min_battery,
+      total_usage_hours,
+      days_since_last_service,
       reading_count
     """
     cur = conn.cursor()
 
-    # Equipment record
+    # --- Equipment record ---
     cur.execute(
         "SELECT total_usage_hours, last_service_date FROM Equipment WHERE equipment_id = %s",
         (equipment_id,),
     )
     eq_row = cur.fetchone()
     if eq_row is None:
+        cur.close()
         raise ValueError(f"Equipment '{equipment_id}' not found")
 
     usage_hours, last_service_date = eq_row
 
     days_since_service = 0.0
     if last_service_date:
-        now = datetime.now(timezone.utc).date()
-        svc = last_service_date if isinstance(last_service_date, type(now)) else last_service_date.date()
-        days_since_service = (now - svc).days
+        now_date = datetime.now(timezone.utc).date()
+        svc_date = (
+            last_service_date.date()
+            if hasattr(last_service_date, "date")
+            else last_service_date
+        )
+        days_since_service = float((now_date - svc_date).days)
 
-    # Aggregate sensor stats from last 30 days
+    # --- Aggregate stats from all SensorReadings for this equipment ---
     cur.execute(
         """
         SELECT
@@ -79,7 +75,6 @@ def extract_features(conn, equipment_id: str) -> dict[str, Any]:
             COUNT(*)          AS cnt
         FROM SensorReadings
         WHERE equipment_id = %s
-          AND timestamp > NOW() - INTERVAL '30 days'
         """,
         (equipment_id,),
     )
@@ -87,36 +82,37 @@ def extract_features(conn, equipment_id: str) -> dict[str, Any]:
     (avg_temp, max_temp, avg_vib, max_vib,
      avg_pres, min_pres, avg_batt, min_batt, cnt) = row
 
-    # Vibration trend: avg of most-recent 5 readings vs overall avg
+    # --- Vibration trend: avg of 5 most-recent readings vs overall avg ---
     cur.execute(
         """
-        SELECT AVG(vibration)
-        FROM (
-            SELECT vibration FROM SensorReadings
+        SELECT AVG(v) FROM (
+            SELECT vibration AS v
+            FROM SensorReadings
             WHERE equipment_id = %s
+              AND vibration IS NOT NULL
             ORDER BY timestamp DESC
             LIMIT 5
         ) recent
         """,
         (equipment_id,),
     )
-    recent_vib_avg = cur.fetchone()[0] or 0.0
-    vibration_trend = float(recent_vib_avg) - float(avg_vib or 0.0)
+    recent_vib = cur.fetchone()[0] or 0.0
+    vibration_trend = float(recent_vib) - float(avg_vib or 0.0)
 
     cur.close()
 
     return {
-        "equipment_id":           equipment_id,
-        "avg_temperature":        float(avg_temp  or 0.0),
-        "max_temperature":        float(max_temp  or 0.0),
-        "avg_vibration":          float(avg_vib   or 0.0),
-        "max_vibration":          float(max_vib   or 0.0),
-        "vibration_trend":        float(vibration_trend),
-        "avg_pressure":           float(avg_pres  or 0.0),
-        "min_pressure":           float(min_pres  or 0.0),
-        "avg_battery":            float(avg_batt  or 100.0),
-        "min_battery":            float(min_batt  or 100.0),
-        "total_usage_hours":      float(usage_hours or 0.0),
-        "days_since_last_service":float(days_since_service),
-        "reading_count":          int(cnt or 0),
+        "equipment_id":            equipment_id,
+        "avg_temperature":         float(avg_temp  or 0.0),
+        "max_temperature":         float(max_temp  or 0.0),
+        "avg_vibration":           float(avg_vib   or 0.0),
+        "max_vibration":           float(max_vib   or 0.0),
+        "vibration_trend":         round(vibration_trend, 6),
+        "avg_pressure":            float(avg_pres  or 0.0),
+        "min_pressure":            float(min_pres  or 999.0),
+        "avg_battery":             float(avg_batt  or 100.0),
+        "min_battery":             float(min_batt  or 100.0),
+        "total_usage_hours":       float(usage_hours or 0.0),
+        "days_since_last_service": days_since_service,
+        "reading_count":           int(cnt or 0),
     }
